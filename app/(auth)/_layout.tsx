@@ -19,6 +19,14 @@ export default function RootLayout() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="forgot-password"
+        options={{
+          headerTitle: "Forgot Password",
+          headerTitleAlign: "center",
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }
