@@ -98,7 +98,7 @@ export default function LoginScreen() {
       setPasswordStatus("invalid");
       Alert.alert("Login Failed", error.message);
     } else {
-      // router.replace("/(tabs)"); // Or your specific home route
+      router.replace("/(tabs)/chats"); // Or your specific home route
       Alert.alert("login success!");
     }
   };
@@ -126,7 +126,7 @@ export default function LoginScreen() {
             <LottieView
               ref={animation}
               source={require("../../assets/icons/business-analysis.json")}
-              style={{ width: 140, height: 140 }}
+              style={{ width: 150, height: 150 }}
               autoPlay
               loop
             />

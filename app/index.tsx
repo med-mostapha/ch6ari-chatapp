@@ -1,27 +1,12 @@
-import { Link } from "expo-router";
-import { Text, View } from "react-native";
+import { Redirect } from "expo-router";
 
 export default function Index() {
-  // async function testProfiles() {
+  // Logic to check if user is logged in (e.g., from a global state or hook)
+  const isAuthenticated = false;
 
-  //   const { data, error } = await supabase.from("profiles").select("*");
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
 
-  //   console.log("Data:", data);
-  //   console.log("Error:", error);
-  // }
-
-  // testProfiles();
-  // return <Redirect href={"/login"} />;
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <Text>Edit app/index.tsx to edit this screen.</Text>
-      <Link href={"/login"}>go to register</Link>
-    </View>
-  );
+  return <Redirect href="/(tabs)/chats" />;
 }

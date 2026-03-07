@@ -101,7 +101,7 @@ export default function RegisterScreen() {
     if (!validateInputs()) return;
 
     setLoading(true);
-    const { error } = await signUp(email, password);
+    const { error } = await signUp(email, password, username);
     setLoading(false);
 
     if (error) {
@@ -138,7 +138,7 @@ export default function RegisterScreen() {
             <LottieView
               ref={animation}
               source={require("../../assets/icons/singing-contract.json")}
-              style={{ width: 120, height: 120 }}
+              style={{ width: 150, height: 150 }}
               autoPlay
               loop
             />
@@ -233,7 +233,7 @@ export default function RegisterScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push("/login")}
+              onPress={() => router.replace("/login")}
               style={styles.footerLink}
             >
               <Text style={styles.footerText}>
