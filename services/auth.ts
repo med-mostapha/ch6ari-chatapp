@@ -48,3 +48,10 @@ export const updatePassword = async (newPassword: string) => {
   });
   return { data, error };
 };
+
+export const updateProfile = async (username: string) => {
+  const { data, error } = await supabase.auth.updateUser({
+    data: { display_name: username },
+  });
+  return { data, error };
+};
