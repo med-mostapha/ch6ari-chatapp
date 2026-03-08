@@ -55,7 +55,7 @@ export default function ChatsScreen() {
       </View>
 
       <FlatList
-        data={[]}
+        data={rooms}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No messages yet</Text>
