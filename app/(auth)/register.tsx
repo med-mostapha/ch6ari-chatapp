@@ -1,4 +1,5 @@
 import { signUp } from "@/services/auth";
+import { createProfile } from "@/services/profileService";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import LottieView from "lottie-react-native";
@@ -101,19 +102,37 @@ export default function RegisterScreen() {
     if (!validateInputs()) return;
 
     setLoading(true);
-    const { error } = await signUp(email, password, username);
-    setLoading(false);
+
+    const { data, error } = await signUp(email, password, username);
 
     if (error) {
+      setLoading(false);
+
       setEmailStatus("invalid");
       setUsernameStatus("invalid");
       setPasswordStatus("invalid");
-      Alert.alert("Error", error.message);
-    } else {
-      Alert.alert("Success", "Check your email to verify!", [
-        { text: "OK", onPress: () => router.replace("/login") },
-      ]);
+
+      Alert.alert("Error", error.message ?? "Registration failed");
+      return;
     }
+
+    const user = data.user;
+
+    if (user) {
+      const { error: profileError } = await createProfile(user.id, username);
+
+      if (profileError) {
+        setLoading(false);
+        Alert.alert("Profile Error", profileError.message);
+        return;
+      }
+    }
+
+    setLoading(false);
+
+    Alert.alert("Success", "Check your email to verify!", [
+      { text: "OK", onPress: () => router.replace("/login") },
+    ]);
   };
 
   const getBorderColor = (status: ValidationStatus) => {
