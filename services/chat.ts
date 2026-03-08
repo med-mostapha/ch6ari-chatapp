@@ -1,6 +1,5 @@
 import { supabase } from "./supabaseClient";
 
-// دالة لجلب الغرف التي يشارك فيها المستخدم حالياً
 export const getUserRooms = async (userId: string) => {
   const { data, error } = await supabase
     .from("room_members")
@@ -20,20 +19,36 @@ export const getUserRooms = async (userId: string) => {
   return { data, error };
 };
 
-export const createTestChat = async (userId: string, otherUserName: string) => {
-  // 1. Create room
-  const { data: room, error: roomError } = await supabase
-    .from("rooms")
-    .insert([{ name: otherUserName, created_by: userId }])
-    .select()
-    .single();
+export const getRoomMessages = async (roomId: string) => {
+  const { data, error } = await supabase
+    .from("messages")
+    .select(
+      `
+      id,
+      content,
+      created_at,
+      user_id,
+      profiles:user_id (
+        username,
+        avatar_url
+      )
+    `,
+    )
+    .eq("room_id", roomId)
+    .order("created_at", { ascending: true });
 
-  if (roomError) return { error: roomError };
+  return { data, error };
+};
 
-  // 2.Add user as member in room
-  const { error: memberError } = await supabase
-    .from("room_members")
-    .insert([{ room_id: room.id, user_id: userId, role: "owner" }]);
-
-  return { data: room, error: memberError };
+export const sendMessage = async (
+  roomId: string,
+  userId: string,
+  content: string,
+) => {
+  const { data, error } = await supabase
+    .from("messages")
+    .insert([
+      { room_id: roomId, user_id: userId, content: content, type: "text" },
+    ]);
+  return { data, error };
 };
