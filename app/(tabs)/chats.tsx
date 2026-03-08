@@ -1,5 +1,5 @@
 import { useAuth } from "@/context/AuthContext";
-import { createTestChat, getUserRooms } from "@/services/chat";
+import { getUserRooms } from "@/services/chat";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import { FlatList, StyleSheet, Text, TextInput, View } from "react-native";
@@ -21,16 +21,16 @@ export default function ChatsScreen() {
   const { session } = useAuth();
   const [rooms, setRooms] = useState<RoomData[]>([]);
 
-  const handleCreateTest = async () => {
-    if (!session?.user?.id) return;
+  // const handleCreateTest = async () => {
+  //   if (!session?.user?.id) return;
 
-    const { error } = await createTestChat(session.user.id, "Test User");
-    if (error) {
-      console.log("Error creating test chat:", error);
-    } else {
-      fetchRooms();
-    }
-  };
+  //   const { error } = await createTestChat(session.user.id, "Test User");
+  //   if (error) {
+  //     console.log("Error creating test chat:", error);
+  //   } else {
+  //     fetchRooms();
+  //   }
+  // };
 
   const fetchRooms = async () => {
     const { data, error } = await getUserRooms(session?.user?.id!);
