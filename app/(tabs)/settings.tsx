@@ -1,4 +1,5 @@
 import { SettingsItem } from "@/components/SettingsItem";
+import { useAuth } from "@/context/AuthContext";
 import { signOut } from "@/services/auth";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -7,6 +8,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { session } = useAuth();
+
+  const userMetadata = session?.user?.user_metadata;
+  const email = session?.user?.email;
+  const username = userMetadata?.display_name || "User";
 
   const handleLogout = () => {
     Alert.alert("Sign Out", "Are you sure you want to log out?", [
@@ -18,9 +24,6 @@ export default function SettingsScreen() {
           const { error } = await signOut();
           if (error) {
             Alert.alert("Error", error.message);
-          } else {
-            // The AuthProvider in _layout.tsx will detect the
-            // null session and redirect to /login automatically.
           }
         },
       },
@@ -33,6 +36,20 @@ export default function SettingsScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
         </View>
+
+        {/* --- Profile Header Section --- */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatarContainer}>
+            <Text style={styles.avatarText}>
+              {username.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>{username}</Text>
+            <Text style={styles.profileEmail}>{email}</Text>
+          </View>
+        </View>
+        {/* ------------------------------ */}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
@@ -78,8 +95,49 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FAFB" },
   scrollContent: { padding: 20 },
-  header: { marginBottom: 24 },
+  header: { marginBottom: 20 },
   title: { fontSize: 28, fontWeight: "800", color: "#111827" },
+
+  profileCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 30,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 7,
+    elevation: 2,
+  },
+  avatarContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#2563EB",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  avatarText: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "700",
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  profileName: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  profileEmail: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+
   section: { marginBottom: 24 },
   sectionTitle: {
     fontSize: 13,
