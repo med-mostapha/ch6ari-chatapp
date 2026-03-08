@@ -47,6 +47,7 @@ export default function ForgotPassword() {
       <TextInput
         style={styles.input}
         placeholder="Email Address"
+        placeholderTextColor={"#8f8f8f"}
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
@@ -90,6 +91,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     fontSize: 16,
+    color: "black",
   },
   button: {
     backgroundColor: "#2563EB",
