@@ -85,7 +85,7 @@ export default function ChatsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Messages</Text>
-        <TouchableOpacity onPress={handleCreateTest}>
+        <TouchableOpacity onPress={() => router.push("/new-chat")}>
           <Ionicons name="create-outline" size={26} color="#2563EB" />
         </TouchableOpacity>
       </View>
