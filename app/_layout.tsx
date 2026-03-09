@@ -37,7 +37,7 @@ function RootLayoutNav() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen
         name="chat"
-        options={{ headerShown: true, headerBackButtonDisplayMode: "minimal" }}
+        options={{ headerShown: false, headerBackButtonDisplayMode: "minimal" }}
       />
     </Stack>
   );

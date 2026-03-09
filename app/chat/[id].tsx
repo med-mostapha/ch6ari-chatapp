@@ -1,10 +1,12 @@
+import { MessageBubble } from "@/components/MessageBubble";
 import { useAuth } from "@/context/AuthContext";
-import { getRoomMessages, sendMessage } from "@/services/chat";
+import { deleteMessages, getRoomMessages, sendMessage } from "@/services/chat";
 import { supabase } from "@/services/supabaseClient";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -19,10 +21,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function ChatDetailScreen() {
   const { id } = useLocalSearchParams();
   const { session } = useAuth();
+  const router = useRouter();
   const flatListRef = useRef<FlatList>(null);
 
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     fetchMessages();
@@ -39,21 +45,24 @@ export default function ChatDetailScreen() {
         },
         (payload) => {
           setMessages((prev) => {
-            // التحقق مما إذا كانت الرسالة موجودة بالفعل (لتجنب التكرار)
             const exists = prev.some((m) => m.id === payload.new.id);
             if (exists) return prev;
-
-            // إذا كان هناك رسالة مؤقتة بنفس المحتوى، نقوم بإزالتها وإضافة الحقيقية
-            const updatedList = prev.filter(
+            const filtered = prev.filter(
               (m) =>
                 !(
                   m.id.toString().startsWith("temp-") &&
                   m.content === payload.new.content
                 ),
             );
-
-            return [...updatedList, payload.new];
+            return [...filtered, payload.new];
           });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "messages" },
+        (payload) => {
+          setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
         },
       )
       .subscribe();
@@ -64,7 +73,7 @@ export default function ChatDetailScreen() {
   }, [id]);
 
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length > 0 && !selectionMode) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -72,24 +81,24 @@ export default function ChatDetailScreen() {
   }, [messages]);
 
   const fetchMessages = async () => {
-    const { data } = await getRoomMessages(id as string);
-    if (data) setMessages(data);
-  };
-
-  const formatMessageTime = (dateString: string) => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    try {
+      const { data, error } = await getRoomMessages(id as string);
+      if (error) throw error;
+      if (data) setMessages(data);
+    } catch (error) {
+      Alert.alert("Error", "Failed to load chat history.");
+    }
   };
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !session?.user?.id) return;
+    if (!newMessage.trim() || !session?.user?.id || isSending) return;
 
     const content = newMessage.trim();
     setNewMessage("");
+    setIsSending(true);
 
     const tempId = `temp-${Date.now()}`;
-    const tempMessage = {
+    const tempMsg = {
       id: tempId,
       content,
       user_id: session.user.id,
@@ -97,125 +106,161 @@ export default function ChatDetailScreen() {
       created_at: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, tempMessage]);
+    setMessages((prev) => [...prev, tempMsg]);
 
     const { error } = await sendMessage(id as string, session.user.id, content);
+    setIsSending(false);
 
     if (error) {
-      console.error("Send error:", error);
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setNewMessage(content);
+      Alert.alert("Failed to send", "Please check your connection.");
+    }
+  };
+
+  const handleLongPress = (messageId: string, isMine: boolean) => {
+    if (!isMine) return;
+    setSelectionMode(true);
+    setSelectedIds([messageId]);
+  };
+
+  const handlePress = (messageId: string, isMine: boolean) => {
+    if (selectionMode && isMine) {
+      setSelectedIds((prev) =>
+        prev.includes(messageId)
+          ? prev.filter((i) => i !== messageId)
+          : [...prev, messageId],
+      );
+    }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert(
+      "Delete Messages",
+      `Delete ${selectedIds.length} messages for everyone?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: processDelete },
+      ],
+    );
+  };
+
+  const processDelete = async () => {
+    const { error } = await deleteMessages(selectedIds);
+    if (error) {
+      Alert.alert("Error", "Could not delete messages.");
+    } else {
+      setSelectionMode(false);
+      setSelectedIds([]);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      {/* Dynamic Header */}
+      <View style={styles.header}>
+        {selectionMode ? (
+          <View style={styles.headerContent}>
+            <TouchableOpacity
+              onPress={() => {
+                setSelectionMode(false);
+                setSelectedIds([]);
+              }}
+            >
+              <Ionicons name="close" size={26} color="#111827" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>
+              {selectedIds.length} Selected
+            </Text>
+            <TouchableOpacity onPress={confirmDelete}>
+              <Ionicons name="trash-outline" size={26} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.headerContent}>
+            <TouchableOpacity onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={26} color="#111827" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Chat Room</Text>
+            <View style={{ width: 26 }} />
+          </View>
+        )}
+      </View>
+
       <FlatList
         ref={flatListRef}
         data={messages}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.messagesList}
+        contentContainerStyle={styles.listContent}
         renderItem={({ item }) => {
           const isMine = item.user_id === session?.user?.id;
-          const isTemp = item.id.toString().startsWith("temp-");
-
           return (
-            <View
-              style={[
-                styles.messageWrapper,
-                isMine ? styles.myWrapper : styles.theirWrapper,
-              ]}
-            >
-              <View
-                style={[
-                  styles.messageBubble,
-                  isMine ? styles.myMessage : styles.theirMessage,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.messageText,
-                    isMine ? styles.myText : styles.theirText,
-                  ]}
-                >
-                  {item.content}
-                </Text>
-
-                <View style={styles.messageFooter}>
-                  <Text
-                    style={[
-                      styles.timeText,
-                      isMine ? styles.myTimeText : styles.theirTimeText,
-                    ]}
-                  >
-                    {formatMessageTime(item.created_at)}
-                  </Text>
-                  {isMine && (
-                    <Ionicons
-                      name={isTemp ? "time-outline" : "checkmark-done"}
-                      size={15}
-                      color={isTemp ? "rgba(255,255,255,0.5)" : "#fff"}
-                      style={{ marginLeft: 4 }}
-                    />
-                  )}
-                </View>
-              </View>
-            </View>
+            <MessageBubble
+              item={item}
+              isMine={isMine}
+              isSelected={selectedIds.includes(item.id)}
+              selectionMode={selectionMode}
+              onLongPress={() => handleLongPress(item.id, isMine)}
+              onPress={() => handlePress(item.id, isMine)}
+              formatTime={(d) =>
+                new Date(d).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              }
+            />
           );
         }}
       />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      >
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Type a message..."
-            placeholderTextColor={"#858585"}
-            value={newMessage}
-            onChangeText={setNewMessage}
-            multiline
-          />
-          <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-            <Ionicons name="send" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+      {/* Input Area */}
+      {!selectionMode && (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+        >
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={styles.input}
+              placeholder="Type a message..."
+              value={newMessage}
+              onChangeText={setNewMessage}
+              multiline
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendBtn,
+                !newMessage.trim() && styles.sendBtnDisabled,
+              ]}
+              onPress={handleSend}
+              disabled={!newMessage.trim() || isSending}
+            >
+              <Ionicons name="send" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
-  messagesList: { padding: 20 },
-  messageWrapper: { width: "100%", flexDirection: "row", marginVertical: 4 },
-  myWrapper: { justifyContent: "flex-end" },
-  theirWrapper: { justifyContent: "flex-start" },
-  messageBubble: {
-    maxWidth: "80%",
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
-    borderRadius: 18,
-    minWidth: 80,
+  header: {
+    height: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    justifyContent: "center",
   },
-  myMessage: { backgroundColor: "#2563EB", borderBottomRightRadius: 4 },
-  theirMessage: { backgroundColor: "#F3F4F6", borderBottomLeftRadius: 4 },
-  messageText: { fontSize: 16 },
-  myText: { color: "#fff" },
-  theirText: { color: "#111827" },
-  messageFooter: {
+  headerContent: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
-    marginTop: 2,
+    justifyContent: "space-between",
+    paddingHorizontal: 15,
   },
-  timeText: { fontSize: 10 },
-  myTimeText: { color: "rgba(255, 255, 255, 0.7)" },
-  theirTimeText: { color: "#9CA3AF" },
-  inputContainer: {
+  headerTitle: { fontSize: 18, fontWeight: "700", color: "#111827" },
+  listContent: { paddingVertical: 10 },
+  inputWrapper: {
     flexDirection: "row",
     padding: 15,
     alignItems: "center",
@@ -226,19 +271,20 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     backgroundColor: "#F9FAFB",
-    borderRadius: 20,
+    borderRadius: 22,
     paddingHorizontal: 15,
-    paddingVertical: 8,
+    paddingVertical: 10,
     marginRight: 10,
     fontSize: 16,
     maxHeight: 100,
   },
-  sendButton: {
+  sendBtn: {
     backgroundColor: "#2563EB",
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
   },
+  sendBtnDisabled: { backgroundColor: "#93C5FD" },
 });
