@@ -1,8 +1,17 @@
 import { supabase } from "./supabaseClient";
 
-// services/chat.ts
+export const deleteMessages = async (messageIds: string[]) => {
+  try {
+    const { error } = await supabase
+      .from("messages")
+      .delete()
+      .in("id", messageIds);
 
-// services/chat.ts
+    return { error };
+  } catch (err) {
+    return { error: err };
+  }
+};
 
 export const getUserRooms = async (userId: string) => {
   const { data, error } = await supabase
