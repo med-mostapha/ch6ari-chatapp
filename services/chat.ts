@@ -1,5 +1,9 @@
 import { supabase } from "./supabaseClient";
 
+// services/chat.ts
+
+// services/chat.ts
+
 export const getUserRooms = async (userId: string) => {
   const { data, error } = await supabase
     .from("room_members")
@@ -9,12 +13,18 @@ export const getUserRooms = async (userId: string) => {
       rooms (
         id,
         name,
-        description,
-        created_at
+        messages (
+          content,
+          created_at
+        )
       )
     `,
     )
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .order("created_at", {
+      referencedTable: "rooms.messages",
+      ascending: false,
+    });
 
   return { data, error };
 };
