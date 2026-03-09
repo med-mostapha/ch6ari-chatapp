@@ -1,8 +1,17 @@
+import { ChatItem } from "@/components/ChatItem";
 import { useAuth } from "@/context/AuthContext";
-import { getUserRooms } from "@/services/chat";
+import { createTestChat, getUserRooms } from "@/services/chat";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
-import { FlatList, StyleSheet, Text, TextInput, View } from "react-native";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface RoomData {
@@ -17,31 +26,46 @@ interface RoomData {
 
 export default function ChatsScreen() {
   const [search, setSearch] = useState("");
-
   const { session } = useAuth();
   const [rooms, setRooms] = useState<RoomData[]>([]);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
-  // const handleCreateTest = async () => {
-  //   if (!session?.user?.id) return;
-
-  //   const { error } = await createTestChat(session.user.id, "Test User");
-  //   if (error) {
-  //     console.log("Error creating test chat:", error);
-  //   } else {
-  //     fetchRooms();
-  //   }
-  // };
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchRooms();
+    }
+  }, [session?.user?.id]);
 
   const fetchRooms = async () => {
-    const { data, error } = await getUserRooms(session?.user?.id!);
-    if (data) setRooms(data as any);
+    if (!session?.user?.id) return;
+    setLoading(true);
+    const { data, error } = await getUserRooms(session.user.id);
+    setLoading(false);
+
+    if (data) {
+      setRooms(data as any);
+    }
+  };
+
+  const handleCreateTest = async () => {
+    if (!session?.user?.id) return;
+
+    const { error } = await createTestChat(session.user.id, "Test User");
+    if (error) {
+      console.log("Error creating test chat:", error);
+    } else {
+      fetchRooms();
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Messages</Text>
-        <Ionicons name="create-outline" size={26} color="#2563EB" />
+        <TouchableOpacity onPress={handleCreateTest}>
+          <Ionicons name="create-outline" size={26} color="#2563EB" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchContainer}>
@@ -56,12 +80,22 @@ export default function ChatsScreen() {
 
       <FlatList
         data={rooms}
+        keyExtractor={(item) => item.room_id}
+        refreshing={loading}
+        onRefresh={fetchRooms}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No messages yet</Text>
           </View>
         }
-        renderItem={null}
+        renderItem={({ item }) => (
+          <ChatItem
+            name={item.rooms?.name || "Group"}
+            lastMessage="Tap to open conversation"
+            time="Now"
+            onPress={() => router.push(`/chat/${item.room_id}`)}
+          />
+        )}
       />
     </SafeAreaView>
   );

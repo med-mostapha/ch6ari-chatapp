@@ -45,13 +45,13 @@ export default function ChatDetailScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       {/* Header */}
-      <View style={styles.header}>
+      {/* <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chat Room</Text>
         <View style={{ width: 24 }} />
-      </View>
+      </View> */}
 
       {/* Messages List */}
       <FlatList

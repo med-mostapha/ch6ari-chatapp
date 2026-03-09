@@ -19,6 +19,24 @@ export const getUserRooms = async (userId: string) => {
   return { data, error };
 };
 
+export const createTestChat = async (userId: string, otherUserName: string) => {
+  // 1. Create room
+  const { data: room, error: roomError } = await supabase
+    .from("rooms")
+    .insert([{ name: otherUserName, created_by: userId }])
+    .select()
+    .single();
+
+  if (roomError) return { error: roomError };
+
+  // 2.Add user as member in room
+  const { error: memberError } = await supabase
+    .from("room_members")
+    .insert([{ room_id: room.id, user_id: userId, role: "owner" }]);
+
+  return { data: room, error: memberError };
+};
+
 export const getRoomMessages = async (roomId: string) => {
   const { data, error } = await supabase
     .from("messages")
