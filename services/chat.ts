@@ -89,3 +89,42 @@ export const sendMessage = async (
     ]);
   return { data, error };
 };
+
+export const startNewChat = async (
+  currentUserId: string,
+  targetUserId: string,
+  targetUserName: string,
+) => {
+  try {
+    const { data: room, error: roomError } = await supabase
+      .from("rooms")
+      .insert([{ name: targetUserName }])
+      .select()
+      .single();
+
+    if (roomError) throw roomError;
+
+    const { error: membersError } = await supabase.from("room_members").insert([
+      { room_id: room.id, user_id: currentUserId },
+      { room_id: room.id, user_id: targetUserId },
+    ]);
+
+    if (membersError) throw membersError;
+
+    return { data: room, error: null };
+  } catch (error) {
+    console.error("Error starting chat:", error);
+    return { data: null, error };
+  }
+};
+
+export const searchUsers = async (query: string, currentUserId: string) => {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url")
+    .ilike("full_name", `%${query}%`)
+    .neq("id", currentUserId)
+    .limit(10);
+
+  return { data, error };
+};
