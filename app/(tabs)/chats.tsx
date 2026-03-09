@@ -1,6 +1,7 @@
 import { ChatItem } from "@/components/ChatItem";
 import { useAuth } from "@/context/AuthContext";
 import { createTestChat, getUserRooms } from "@/services/chat";
+import { supabase } from "@/services/supabaseClient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -19,8 +20,10 @@ interface RoomData {
   rooms: {
     id: string;
     name: string;
-    description: string | null;
-    created_at: string;
+    messages: {
+      content: string;
+      created_at: string;
+    }[];
   };
 }
 
@@ -47,6 +50,25 @@ export default function ChatsScreen() {
       setRooms(data as any);
     }
   };
+
+  useEffect(() => {
+    fetchRooms();
+
+    const channel = supabase
+      .channel("schema-db-changes")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        () => {
+          fetchRooms();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
 
   const handleCreateTest = async () => {
     if (!session?.user?.id) return;
@@ -88,14 +110,26 @@ export default function ChatsScreen() {
             <Text style={styles.emptyText}>No messages yet</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <ChatItem
-            name={item.rooms?.name || "Group"}
-            lastMessage="Tap to open conversation"
-            time="Now"
-            onPress={() => router.push(`/chat/${item.room_id}`)}
-          />
-        )}
+        renderItem={({ item }) => {
+          // جلب آخر رسالة من المصفوفة
+          const lastMsg = item.rooms?.messages?.[0];
+
+          return (
+            <ChatItem
+              name={item.rooms?.name || "Group"}
+              lastMessage={lastMsg?.content || "No messages yet"} // عرض المحتوى الحقيقي
+              time={
+                lastMsg
+                  ? new Date(lastMsg.created_at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : ""
+              }
+              onPress={() => router.push(`/chat/${item.room_id}`)}
+            />
+          );
+        }}
       />
     </SafeAreaView>
   );
