@@ -90,15 +90,31 @@ export const sendMessage = async (
   return { data, error };
 };
 
+// services/chat.ts
+
+// services/chat.ts
+
 export const startNewChat = async (
   currentUserId: string,
   targetUserId: string,
   targetUserName: string,
 ) => {
   try {
+    const { data: existingRooms, error: searchError } = await supabase.rpc(
+      "get_existing_chat_room",
+      {
+        user1: currentUserId,
+        user2: targetUserId,
+      },
+    );
+
+    if (existingRooms && existingRooms.length > 0) {
+      return { data: existingRooms[0], error: null };
+    }
+
     const { data: room, error: roomError } = await supabase
       .from("rooms")
-      .insert([{ name: targetUserName }])
+      .insert([{ name: targetUserName || "New Chat" }])
       .select()
       .single();
 
@@ -121,8 +137,8 @@ export const startNewChat = async (
 export const searchUsers = async (query: string, currentUserId: string) => {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, avatar_url")
-    .ilike("full_name", `%${query}%`)
+    .select("id, username, avatar_url")
+    .ilike("username", `%${query}%`)
     .neq("id", currentUserId)
     .limit(10);
 
