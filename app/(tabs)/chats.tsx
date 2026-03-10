@@ -1,11 +1,12 @@
 import { ChatItem } from "@/components/ChatItem";
 import { useAuth } from "@/context/AuthContext";
-import { createTestChat, getUserRooms } from "@/services/chat";
+import { deleteRoom, getUserRooms } from "@/services/chat";
 import { supabase } from "@/services/supabaseClient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -70,15 +71,23 @@ export default function ChatsScreen() {
     };
   }, [session?.user?.id]);
 
-  const handleCreateTest = async () => {
-    if (!session?.user?.id) return;
-
-    const { error } = await createTestChat(session.user.id, "Test User");
-    if (error) {
-      console.log("Error creating test chat:", error);
-    } else {
-      fetchRooms();
-    }
+  const confirmDeleteRoom = (roomId: string, roomName: string) => {
+    Alert.alert(
+      "Delete Chat",
+      `Are you sure you want to delete the chat with ${roomName}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const { error } = await deleteRoom(roomId);
+            if (error) Alert.alert("Error", "Failed to delete room");
+            else fetchRooms();
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -111,13 +120,12 @@ export default function ChatsScreen() {
           </View>
         }
         renderItem={({ item }) => {
-          // جلب آخر رسالة من المصفوفة
           const lastMsg = item.rooms?.messages?.[0];
 
           return (
             <ChatItem
               name={item.rooms?.name || "Group"}
-              lastMessage={lastMsg?.content || "No messages yet"} // عرض المحتوى الحقيقي
+              lastMessage={lastMsg?.content || "No messages yet"}
               time={
                 lastMsg
                   ? new Date(lastMsg.created_at).toLocaleTimeString([], {
@@ -127,6 +135,9 @@ export default function ChatsScreen() {
                   : ""
               }
               onPress={() => router.push(`/chat/${item.room_id}`)}
+              onLongPress={() =>
+                confirmDeleteRoom(item.room_id, item.rooms?.name)
+              }
             />
           );
         }}
