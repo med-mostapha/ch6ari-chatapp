@@ -40,7 +40,7 @@ export default function NewChatScreen() {
     const { data, error } = await startNewChat(
       session.user.id,
       targetUser.id,
-      targetUser.full_name,
+      targetUser.username,
     );
     setLoading(false);
 
@@ -83,9 +83,9 @@ export default function NewChatScreen() {
             onPress={() => handleCreateChat(item)}
           >
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{item.full_name?.[0]}</Text>
+              <Text style={styles.avatarText}>{item.username?.[0]}</Text>
             </View>
-            <Text style={styles.userName}>{item.full_name}</Text>
+            <Text style={styles.userName}>{item.username}</Text>
             <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
           </TouchableOpacity>
         )}
