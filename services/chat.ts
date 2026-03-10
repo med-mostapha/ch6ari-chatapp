@@ -13,6 +13,16 @@ export const deleteMessages = async (messageIds: string[]) => {
   }
 };
 
+export const deleteRoom = async (roomId: string) => {
+  try {
+    const { error } = await supabase.from("rooms").delete().eq("id", roomId);
+
+    return { error };
+  } catch (error) {
+    return { error };
+  }
+};
+
 export const getUserRooms = async (userId: string) => {
   const { data, error } = await supabase
     .from("room_members")
@@ -89,10 +99,6 @@ export const sendMessage = async (
     ]);
   return { data, error };
 };
-
-// services/chat.ts
-
-// services/chat.ts
 
 export const startNewChat = async (
   currentUserId: string,
