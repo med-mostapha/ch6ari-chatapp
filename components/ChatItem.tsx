@@ -7,6 +7,7 @@ interface ChatItemProps {
   time: string;
   unreadCount?: number;
   onPress: () => void;
+  onLongPress: () => void;
 }
 
 export const ChatItem = ({
@@ -15,9 +16,14 @@ export const ChatItem = ({
   time,
   unreadCount,
   onPress,
+  onLongPress,
 }: ChatItemProps) => {
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress}>
+    <TouchableOpacity
+      style={styles.container}
+      onPress={onPress}
+      onLongPress={onLongPress}
+    >
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
       </View>
