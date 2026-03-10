@@ -158,9 +158,13 @@ export const createRoom = async (name: string, userId: string) => {
   }
 };
 
+// services/chat.ts
+
 export const inviteUserToRoom = async (
   roomId: string,
   targetUserId: string,
+  inviterName: string,
+  targetUserName: string,
 ) => {
   try {
     const { data: exists } = await supabase
@@ -171,11 +175,64 @@ export const inviteUserToRoom = async (
 
     if (exists) return { error: { message: "User already in room" } };
 
-    const { error } = await supabase
+    const { error: memberError } = await supabase
       .from("room_members")
       .insert([{ room_id: roomId, user_id: targetUserId }]);
 
+    if (memberError) throw memberError;
+
+    await supabase.from("messages").insert([
+      {
+        room_id: roomId,
+        user_id: targetUserId,
+        content: `${inviterName} added ${targetUserName} to the chat`,
+        type: "system",
+      },
+    ]);
+
+    return { error: null };
+  } catch (error) {
     return { error };
+  }
+};
+
+export const getRoomMembers = async (roomId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from("room_members")
+      .select(
+        `
+        user_id,
+        profiles:user_id (
+          username,
+          avatar_url
+        )
+      `,
+      )
+      .eq("room_id", roomId);
+
+    return { data, error };
+  } catch (error) {
+    return { data: null, error };
+  }
+};
+
+export const leaveRoom = async (
+  roomId: string,
+  userId: string,
+  isOwner: boolean,
+) => {
+  try {
+    if (isOwner) {
+      return await deleteRoom(roomId);
+    } else {
+      const { error } = await supabase
+        .from("room_members")
+        .delete()
+        .match({ room_id: roomId, user_id: userId });
+
+      return { error };
+    }
   } catch (error) {
     return { error };
   }
