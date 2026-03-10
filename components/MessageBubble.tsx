@@ -10,6 +10,7 @@ interface MessageBubbleProps {
   onPress: () => void;
   selectionMode: boolean;
   formatTime: (date: string) => string;
+  isOwner: boolean;
 }
 
 export const MessageBubble = ({
@@ -20,8 +21,10 @@ export const MessageBubble = ({
   onPress,
   selectionMode,
   formatTime,
+  isOwner,
 }: MessageBubbleProps) => {
   const isTemp = item.id.toString().startsWith("temp-");
+  const username = item.profiles?.username || "User";
 
   return (
     <TouchableOpacity
@@ -45,9 +48,18 @@ export const MessageBubble = ({
       <View
         style={[styles.bubble, isMine ? styles.myBubble : styles.theirBubble]}
       >
+        {/* عرض اسم المستخدم فوق الرسالة (للآخرين أو للمالك) */}
+        {!isMine && (
+          <View style={styles.usernameRow}>
+            <Text style={styles.usernameText}>{username}</Text>
+            {isOwner && <Text style={styles.ownerTag}>(owner)</Text>}
+          </View>
+        )}
+
         <Text style={[styles.text, isMine ? styles.myText : styles.theirText]}>
           {item.content}
         </Text>
+
         <View style={styles.footer}>
           <Text
             style={[styles.time, isMine ? styles.myTime : styles.theirTime]}
@@ -81,13 +93,21 @@ const styles = StyleSheet.create({
   bubble: {
     maxWidth: "75%",
     paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingTop: 6,
     paddingBottom: 4,
     borderRadius: 18,
-    minWidth: 80,
+    minWidth: 90,
   },
   myBubble: { backgroundColor: "#2563EB", borderBottomRightRadius: 4 },
   theirBubble: { backgroundColor: "#f1f1f1", borderBottomLeftRadius: 4 },
+  usernameRow: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
+  usernameText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#2563EB",
+    marginRight: 4,
+  },
+  ownerTag: { fontSize: 10, color: "#EF4444", fontWeight: "bold" },
   text: { fontSize: 16 },
   myText: { color: "#fff" },
   theirText: { color: "#111827" },

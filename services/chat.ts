@@ -48,24 +48,6 @@ export const getUserRooms = async (userId: string) => {
   return { data, error };
 };
 
-export const createTestChat = async (userId: string, otherUserName: string) => {
-  // 1. Create room
-  const { data: room, error: roomError } = await supabase
-    .from("rooms")
-    .insert([{ name: otherUserName, created_by: userId }])
-    .select()
-    .single();
-
-  if (roomError) return { error: roomError };
-
-  // 2.Add user as member in room
-  const { error: memberError } = await supabase
-    .from("room_members")
-    .insert([{ room_id: room.id, user_id: userId, role: "owner" }]);
-
-  return { data: room, error: memberError };
-};
-
 export const getRoomMessages = async (roomId: string) => {
   const { data, error } = await supabase
     .from("messages")
@@ -149,4 +131,52 @@ export const searchUsers = async (query: string, currentUserId: string) => {
     .limit(10);
 
   return { data, error };
+};
+
+export const createRoom = async (name: string, userId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from("rooms")
+      .insert([
+        {
+          name,
+          created_by: userId,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await supabase
+      .from("room_members")
+      .insert([{ room_id: data.id, user_id: userId }]);
+
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+};
+
+export const inviteUserToRoom = async (
+  roomId: string,
+  targetUserId: string,
+) => {
+  try {
+    const { data: exists } = await supabase
+      .from("room_members")
+      .select("id")
+      .match({ room_id: roomId, user_id: targetUserId })
+      .single();
+
+    if (exists) return { error: { message: "User already in room" } };
+
+    const { error } = await supabase
+      .from("room_members")
+      .insert([{ room_id: roomId, user_id: targetUserId }]);
+
+    return { error };
+  } catch (error) {
+    return { error };
+  }
 };

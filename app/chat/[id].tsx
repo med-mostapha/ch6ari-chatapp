@@ -1,6 +1,6 @@
 import { MessageBubble } from "@/components/MessageBubble";
 import { useAuth } from "@/context/AuthContext";
-import { deleteMessages, getRoomMessages, sendMessage } from "@/services/chat";
+import { deleteMessages, sendMessage } from "@/services/chat";
 import { supabase } from "@/services/supabaseClient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -29,8 +29,10 @@ export default function ChatDetailScreen() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [roomOwner, setRoomOwner] = useState<string | null>(null);
 
   useEffect(() => {
+    fetchRoomDetails();
     fetchMessages();
 
     const channel = supabase
@@ -43,7 +45,16 @@ export default function ChatDetailScreen() {
           table: "messages",
           filter: `room_id=eq.${id}`,
         },
-        (payload) => {
+        async (payload) => {
+          // جلب اسم المستخدم للرسالة الجديدة في الوقت الفعلي
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("username")
+            .eq("id", payload.new.user_id)
+            .single();
+
+          const msgWithProfile = { ...payload.new, profiles: profile };
+
           setMessages((prev) => {
             const exists = prev.some((m) => m.id === payload.new.id);
             if (exists) return prev;
@@ -54,7 +65,7 @@ export default function ChatDetailScreen() {
                   m.content === payload.new.content
                 ),
             );
-            return [...filtered, payload.new];
+            return [...filtered, msgWithProfile];
           });
         },
       )
@@ -80,9 +91,23 @@ export default function ChatDetailScreen() {
     }
   }, [messages]);
 
+  const fetchRoomDetails = async () => {
+    const { data } = await supabase
+      .from("rooms")
+      .select("created_by")
+      .eq("id", id)
+      .single();
+    if (data) setRoomOwner(data.created_by);
+  };
+
   const fetchMessages = async () => {
     try {
-      const { data, error } = await getRoomMessages(id as string);
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*, profiles(username)")
+        .eq("room_id", id)
+        .order("created_at", { ascending: true });
+
       if (error) throw error;
       if (data) setMessages(data);
     } catch (error) {
@@ -104,6 +129,7 @@ export default function ChatDetailScreen() {
       user_id: session.user.id,
       room_id: id,
       created_at: new Date().toISOString(),
+      profiles: { username: "You" },
     };
 
     setMessages((prev) => [...prev, tempMsg]);
@@ -135,21 +161,15 @@ export default function ChatDetailScreen() {
   };
 
   const confirmDelete = () => {
-    Alert.alert(
-      "Delete Messages",
-      `Delete ${selectedIds.length} messages for everyone?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: processDelete },
-      ],
-    );
+    Alert.alert("Delete", `Delete ${selectedIds.length} messages?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: processDelete },
+    ]);
   };
 
   const processDelete = async () => {
     const { error } = await deleteMessages(selectedIds);
-    if (error) {
-      Alert.alert("Error", "Could not delete messages.");
-    } else {
+    if (!error) {
       setSelectionMode(false);
       setSelectedIds([]);
     }
@@ -157,34 +177,41 @@ export default function ChatDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      {/* Dynamic Header */}
       <View style={styles.header}>
-        {selectionMode ? (
-          <View style={styles.headerContent}>
-            <TouchableOpacity
-              onPress={() => {
-                setSelectionMode(false);
-                setSelectedIds([]);
-              }}
-            >
-              <Ionicons name="close" size={26} color="#111827" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>
-              {selectedIds.length} Selected
-            </Text>
-            <TouchableOpacity onPress={confirmDelete}>
-              <Ionicons name="trash-outline" size={26} color="#EF4444" />
-            </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={26} color="#111827" />
+          </TouchableOpacity>
+
+          <Text style={styles.headerTitle}>
+            {selectionMode ? `${selectedIds.length} Selected` : "Chat Room"}
+          </Text>
+
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            {selectionMode ? (
+              <TouchableOpacity onPress={confirmDelete}>
+                <Ionicons name="trash-outline" size={26} color="#EF4444" />
+              </TouchableOpacity>
+            ) : (
+              roomOwner === session?.user?.id && (
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push({
+                      pathname: "/new-chat",
+                      params: { roomId: id },
+                    })
+                  }
+                >
+                  <Ionicons
+                    name="person-add-outline"
+                    size={26}
+                    color="#2563EB"
+                  />
+                </TouchableOpacity>
+              )
+            )}
           </View>
-        ) : (
-          <View style={styles.headerContent}>
-            <TouchableOpacity onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={26} color="#111827" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Chat Room</Text>
-            <View style={{ width: 26 }} />
-          </View>
-        )}
+        </View>
       </View>
 
       <FlatList
@@ -200,6 +227,7 @@ export default function ChatDetailScreen() {
               isMine={isMine}
               isSelected={selectedIds.includes(item.id)}
               selectionMode={selectionMode}
+              isOwner={item.user_id === roomOwner}
               onLongPress={() => handleLongPress(item.id, isMine)}
               onPress={() => handlePress(item.id, isMine)}
               formatTime={(d) =>
@@ -213,7 +241,6 @@ export default function ChatDetailScreen() {
         }}
       />
 
-      {/* Input Area */}
       {!selectionMode && (
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}

@@ -1,11 +1,13 @@
 import { useAuth } from "@/context/AuthContext";
-import { searchUsers, startNewChat } from "@/services/chat";
+import { createRoom, searchUsers, startNewChat } from "@/services/chat";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Modal,
   StyleSheet,
   Text,
   TextInput,
@@ -18,6 +20,9 @@ export default function NewChatScreen() {
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [groupName, setGroupName] = useState("");
+
   const { session } = useAuth();
   const router = useRouter();
 
@@ -31,6 +36,21 @@ export default function NewChatScreen() {
     const { data } = await searchUsers(text, session?.user?.id!);
     if (data) setUsers(data);
     setLoading(false);
+  };
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim() || !session?.user?.id) return;
+
+    setLoading(true);
+    const { data, error } = await createRoom(groupName.trim(), session.user.id);
+    setLoading(false);
+    setModalVisible(false);
+
+    if (data) {
+      router.replace(`/chat/${data.id}`);
+    } else {
+      Alert.alert("Error", "Could not create group");
+    }
   };
 
   const handleCreateChat = async (targetUser: any) => {
@@ -51,6 +71,35 @@ export default function NewChatScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Modal visible={modalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>New Group</Text>
+            <TextInput
+              placeholder="Enter group name..."
+              style={styles.modalInput}
+              value={groupName}
+              onChangeText={setGroupName}
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.cancelBtn}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleCreateGroup}
+                style={styles.createBtn}
+              >
+                <Text style={styles.createText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="close" size={28} color="#111827" />
@@ -66,17 +115,23 @@ export default function NewChatScreen() {
           style={styles.input}
           value={query}
           onChangeText={handleSearch}
-          autoFocus
         />
       </View>
-
-      {loading && (
-        <ActivityIndicator style={{ marginTop: 20 }} color="#2563EB" />
-      )}
 
       <FlatList
         data={users}
         keyExtractor={(item) => item.id}
+        ListHeaderComponent={
+          <TouchableOpacity
+            style={styles.groupOption}
+            onPress={() => setModalVisible(true)}
+          >
+            <View style={styles.groupIcon}>
+              <Ionicons name="people" size={24} color="#fff" />
+            </View>
+            <Text style={styles.groupText}>Create New Group</Text>
+          </TouchableOpacity>
+        }
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.userItem}
@@ -90,6 +145,10 @@ export default function NewChatScreen() {
           </TouchableOpacity>
         )}
       />
+
+      {loading && (
+        <ActivityIndicator size="large" style={styles.loader} color="#2563EB" />
+      )}
     </SafeAreaView>
   );
 }
@@ -112,6 +171,23 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   input: { flex: 1, marginLeft: 10, fontSize: 16 },
+  groupOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  groupIcon: {
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    backgroundColor: "#10B981",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 15,
+  },
+  groupText: { fontSize: 16, fontWeight: "600", color: "#10B981" },
   userItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -130,4 +206,40 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
   userName: { flex: 1, fontSize: 16, fontWeight: "500" },
+  loader: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -25 }, { translateY: -25 }],
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    width: "80%",
+    padding: 20,
+    borderRadius: 15,
+  },
+  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 15 },
+  modalInput: {
+    backgroundColor: "#F3F4F6",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  modalButtons: { flexDirection: "row", justifyContent: "flex-end" },
+  cancelBtn: { marginRight: 20, padding: 10 },
+  cancelText: { color: "#6B7280", fontWeight: "600" },
+  createBtn: {
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  createText: { color: "#fff", fontWeight: "bold" },
 });
