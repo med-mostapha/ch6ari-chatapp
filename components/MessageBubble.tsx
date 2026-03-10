@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   myBubble: { backgroundColor: "#2563EB", borderBottomRightRadius: 4 },
-  theirBubble: { backgroundColor: "#b3b3b3", borderBottomLeftRadius: 4 },
+  theirBubble: { backgroundColor: "#f1f1f1", borderBottomLeftRadius: 4 },
   text: { fontSize: 16 },
   myText: { color: "#fff" },
   theirText: { color: "#111827" },
