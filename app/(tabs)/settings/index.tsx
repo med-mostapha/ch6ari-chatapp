@@ -56,7 +56,7 @@ export default function SettingsScreen() {
           <SettingsItem
             label="Edit Profile"
             icon="person-outline"
-            onPress={() => router.push("/settings/edit-profile")}
+            onPress={() => router.push("/(auth)/edit-profile")}
           />
           <SettingsItem
             label="Notifications"
