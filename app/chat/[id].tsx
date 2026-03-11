@@ -1,4 +1,5 @@
 import { MessageBubble } from "@/components/MessageBubble";
+import { RoomDetailsModal } from "@/components/RoomDetailsModal";
 import { useAuth } from "@/context/AuthContext";
 import { deleteMessages, sendMessage } from "@/services/chat";
 import { supabase } from "@/services/supabaseClient";
@@ -7,6 +8,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  AppState,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -31,7 +33,40 @@ export default function ChatDetailScreen() {
   const [isSending, setIsSending] = useState(false);
   const [roomOwner, setRoomOwner] = useState<string | null>(null);
 
+  const [detailsVisible, setDetailsVisible] = useState(false);
+
   useEffect(() => {
+    if (!id) return;
+
+    const roomDeleteChannel = supabase
+      .channel(`room-termination-${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "rooms",
+          filter: `id=eq.${id}`,
+        },
+        () => {
+          Alert.alert("Notice", "This chat has been deleted by the owner.");
+          router.replace("/chats");
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(roomDeleteChannel);
+    };
+  }, [id]);
+
+  useEffect(() => {
+    const appStateSub = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        fetchMessages();
+      }
+    });
+
     fetchRoomDetails();
     fetchMessages();
 
@@ -46,26 +81,23 @@ export default function ChatDetailScreen() {
           filter: `room_id=eq.${id}`,
         },
         async (payload) => {
-          // جلب اسم المستخدم للرسالة الجديدة في الوقت الفعلي
           const { data: profile } = await supabase
             .from("profiles")
             .select("username")
             .eq("id", payload.new.user_id)
             .single();
 
-          const msgWithProfile = { ...payload.new, profiles: profile };
+          const msgWithProfile = {
+            ...payload.new,
+            profiles: profile,
+          };
 
           setMessages((prev) => {
-            const exists = prev.some((m) => m.id === payload.new.id);
-            if (exists) return prev;
-            const filtered = prev.filter(
-              (m) =>
-                !(
-                  m.id.toString().startsWith("temp-") &&
-                  m.content === payload.new.content
-                ),
-            );
-            return [...filtered, msgWithProfile];
+            if (prev.some((m) => m.id === payload.new.id)) return prev;
+            return [
+              ...prev.filter((m) => !m.id.toString().startsWith("temp-")),
+              msgWithProfile,
+            ];
           });
         },
       )
@@ -79,17 +111,10 @@ export default function ChatDetailScreen() {
       .subscribe();
 
     return () => {
+      appStateSub.remove();
       supabase.removeChannel(channel);
     };
   }, [id]);
-
-  useEffect(() => {
-    if (messages.length > 0 && !selectionMode) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [messages]);
 
   const fetchRoomDetails = async () => {
     const { data } = await supabase
@@ -183,9 +208,14 @@ export default function ChatDetailScreen() {
             <Ionicons name="arrow-back" size={26} color="#111827" />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>
-            {selectionMode ? `${selectedIds.length} Selected` : "Chat Room"}
-          </Text>
+          <TouchableOpacity
+            onPress={() => setDetailsVisible(true)}
+            style={{ flex: 1, alignItems: "center" }}
+          >
+            <Text style={styles.headerTitle}>
+              {selectionMode ? `${selectedIds.length} Selected` : "Chat Room"}
+            </Text>
+          </TouchableOpacity>
 
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             {selectionMode ? (
@@ -193,22 +223,32 @@ export default function ChatDetailScreen() {
                 <Ionicons name="trash-outline" size={26} color="#EF4444" />
               </TouchableOpacity>
             ) : (
-              roomOwner === session?.user?.id && (
-                <TouchableOpacity
-                  onPress={() =>
-                    router.push({
-                      pathname: "/new-chat",
-                      params: { roomId: id },
-                    })
-                  }
-                >
+              <View style={{ flexDirection: "row", gap: 15 }}>
+                {roomOwner === session?.user?.id && (
+                  <TouchableOpacity
+                    onPress={() =>
+                      router.push({
+                        pathname: "/new-chat",
+                        params: { roomId: id },
+                      })
+                    }
+                  >
+                    <Ionicons
+                      name="person-add-outline"
+                      size={24}
+                      color="#2563EB"
+                    />
+                  </TouchableOpacity>
+                )}
+                {/* أيقونة التفاصيل */}
+                <TouchableOpacity onPress={() => setDetailsVisible(true)}>
                   <Ionicons
-                    name="person-add-outline"
+                    name="information-circle-outline"
                     size={26}
-                    color="#2563EB"
+                    color="#111827"
                   />
                 </TouchableOpacity>
-              )
+              </View>
             )}
           </View>
         </View>
@@ -239,6 +279,15 @@ export default function ChatDetailScreen() {
             />
           );
         }}
+      />
+
+      <RoomDetailsModal
+        visible={detailsVisible}
+        onClose={() => setDetailsVisible(false)}
+        roomId={id as string}
+        currentUserId={session?.user?.id!}
+        roomOwnerId={roomOwner!}
+        onRoomDeleted={() => router.replace("/chats")}
       />
 
       {!selectionMode && (
