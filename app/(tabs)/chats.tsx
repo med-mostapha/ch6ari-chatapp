@@ -21,13 +21,13 @@ interface RoomData {
   rooms: {
     id: string;
     name: string;
+    is_group: boolean;
     messages: {
       content: string;
       created_at: string;
     }[];
   };
 }
-
 export default function ChatsScreen() {
   const [search, setSearch] = useState("");
   const { session } = useAuth();
@@ -56,7 +56,7 @@ export default function ChatsScreen() {
     if (!session?.user?.id) return;
 
     const channel = supabase
-      .channel("realtime-rooms")
+      .channel("chats-realtime")
       .on(
         "postgres_changes",
         {
@@ -65,9 +65,16 @@ export default function ChatsScreen() {
           table: "room_members",
           filter: `user_id=eq.${session.user.id}`,
         },
-        () => {
-          fetchRooms();
+        () => fetchRooms(),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
         },
+        () => fetchRooms(),
       )
       .subscribe();
 
@@ -75,7 +82,6 @@ export default function ChatsScreen() {
       supabase.removeChannel(channel);
     };
   }, [session?.user?.id]);
-
   useEffect(() => {
     const channel = supabase
       .channel("my_rooms")
@@ -171,6 +177,7 @@ export default function ChatsScreen() {
           return (
             <ChatItem
               name={item.rooms?.name || "Group"}
+              isGroup={item.rooms?.is_group}
               lastMessage={lastMsg?.content || "No messages yet"}
               time={
                 lastMsg
