@@ -26,6 +26,16 @@ export const MessageBubble = ({
   const isTemp = item.id.toString().startsWith("temp-");
   const username = item.profiles?.username || "User";
 
+  if (item.type === "system") {
+    return (
+      <View style={styles.systemContainer}>
+        <View style={styles.systemBadge}>
+          <Text style={styles.systemText}>{item.content}</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <TouchableOpacity
       activeOpacity={0.8}
@@ -48,7 +58,6 @@ export const MessageBubble = ({
       <View
         style={[styles.bubble, isMine ? styles.myBubble : styles.theirBubble]}
       >
-        {/* عرض اسم المستخدم فوق الرسالة (للآخرين أو للمالك) */}
         {!isMine && (
           <View style={styles.usernameRow}>
             <Text style={styles.usernameText}>{username}</Text>
@@ -120,4 +129,12 @@ const styles = StyleSheet.create({
   time: { fontSize: 10, marginRight: 4 },
   myTime: { color: "rgba(255,255,255,0.7)" },
   theirTime: { color: "#9CA3AF" },
+  systemContainer: { alignItems: "center", marginVertical: 8, width: "100%" },
+  systemBadge: {
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  systemText: { fontSize: 12, color: "#6B7280", fontStyle: "italic" },
 });
