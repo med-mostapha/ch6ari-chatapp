@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -8,6 +9,7 @@ interface ChatItemProps {
   unreadCount?: number;
   onPress: () => void;
   onLongPress: () => void;
+  isGroup?: boolean;
 }
 
 export const ChatItem = ({
@@ -17,6 +19,7 @@ export const ChatItem = ({
   unreadCount,
   onPress,
   onLongPress,
+  isGroup,
 }: ChatItemProps) => {
   return (
     <TouchableOpacity
@@ -24,13 +27,27 @@ export const ChatItem = ({
       onPress={onPress}
       onLongPress={onLongPress}
     >
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
+      <View style={[styles.avatar, isGroup && { backgroundColor: "#10B981" }]}>
+        <Text style={styles.avatarText}>
+          {isGroup ? (
+            <Ionicons name="people" size={24} color="#fff" />
+          ) : (
+            name.charAt(0).toUpperCase()
+          )}
+        </Text>
       </View>
 
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.name}>{name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Ionicons
+              name={isGroup ? "people-outline" : "person-outline"}
+              size={16}
+              color="#9CA3AF"
+              style={{ marginRight: 5 }}
+            />
+            <Text style={styles.name}>{name}</Text>
+          </View>
           <Text style={styles.time}>{time}</Text>
         </View>
 
