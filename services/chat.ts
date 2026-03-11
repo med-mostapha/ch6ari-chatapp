@@ -15,10 +15,15 @@ export const deleteMessages = async (messageIds: string[]) => {
 
 export const deleteRoom = async (roomId: string) => {
   try {
+    await supabase.from("messages").delete().eq("room_id", roomId);
+
+    await supabase.from("room_members").delete().eq("room_id", roomId);
+
     const { error } = await supabase.from("rooms").delete().eq("id", roomId);
 
     return { error };
   } catch (error) {
+    console.error("Critical Delete Error:", error);
     return { error };
   }
 };
@@ -158,42 +163,28 @@ export const createRoom = async (name: string, userId: string) => {
   }
 };
 
-// services/chat.ts
-
 export const inviteUserToRoom = async (
   roomId: string,
   targetUserId: string,
+  inviterId: string,
   inviterName: string,
   targetUserName: string,
 ) => {
-  try {
-    const { data: exists } = await supabase
-      .from("room_members")
-      .select("id")
-      .match({ room_id: roomId, user_id: targetUserId })
-      .single();
+  const { error } = await supabase
+    .from("room_members")
+    .insert([{ room_id: roomId, user_id: targetUserId }]);
+  if (error) return { error };
 
-    if (exists) return { error: { message: "User already in room" } };
+  await supabase.from("messages").insert([
+    {
+      room_id: roomId,
+      user_id: inviterId,
+      content: `${inviterName} added ${targetUserName}`,
+      type: "system",
+    },
+  ]);
 
-    const { error: memberError } = await supabase
-      .from("room_members")
-      .insert([{ room_id: roomId, user_id: targetUserId }]);
-
-    if (memberError) throw memberError;
-
-    await supabase.from("messages").insert([
-      {
-        room_id: roomId,
-        user_id: targetUserId,
-        content: `${inviterName} added ${targetUserName} to the chat`,
-        type: "system",
-      },
-    ]);
-
-    return { error: null };
-  } catch (error) {
-    return { error };
-  }
+  return { error: null };
 };
 
 export const getRoomMembers = async (roomId: string) => {
@@ -217,6 +208,15 @@ export const getRoomMembers = async (roomId: string) => {
   }
 };
 
+export const getUsernameById = async (userId: string) => {
+  const { data } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", userId)
+    .single();
+  return data?.username || "Unknown User";
+};
+
 export const leaveRoom = async (
   roomId: string,
   userId: string,
@@ -226,6 +226,17 @@ export const leaveRoom = async (
     if (isOwner) {
       return await deleteRoom(roomId);
     } else {
+      const username = await getUsernameById(userId);
+
+      await supabase.from("messages").insert([
+        {
+          room_id: roomId,
+          user_id: userId,
+          content: `${username} left the chat`,
+          type: "system",
+        },
+      ]);
+
       const { error } = await supabase
         .from("room_members")
         .delete()
