@@ -1,10 +1,10 @@
 import { ChatItem } from "@/components/ChatItem";
 import { useAuth } from "@/context/AuthContext";
-import { deleteRoom, getUserRooms } from "@/services/chat";
+import { deleteRoom, getUsernameById, getUserRooms } from "@/services/chat";
 import { supabase } from "@/services/supabaseClient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -28,6 +28,7 @@ interface RoomData {
     }[];
   };
 }
+
 export default function ChatsScreen() {
   const [search, setSearch] = useState("");
   const { session } = useAuth();
@@ -35,36 +36,37 @@ export default function ChatsScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    if (session?.user?.id) {
-      fetchRooms();
-    }
-  }, [session?.user?.id]);
-
-  const fetchRooms = async () => {
+  const fetchRooms = useCallback(async () => {
     if (!session?.user?.id) return;
     setLoading(true);
-    const { data, error } = await getUserRooms(session.user.id);
+    const { data } = await getUserRooms(session.user.id);
     setLoading(false);
 
     if (data) {
-      setRooms(data as any);
+      const uniqueRooms = data.filter(
+        (v, i, a) => a.findIndex((t) => t.room_id === v.room_id) === i,
+      );
+      setRooms(uniqueRooms as any);
     }
-  };
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
 
+    fetchRooms();
+
     const channel = supabase
-      .channel("chats-realtime")
+      .channel("global-sync", {
+        config: { broadcast: { self: true } },
+      })
+      .on("broadcast", { event: "refresh-chats" }, (payload) => {
+        if (payload.payload.userId === session.user.id) {
+          fetchRooms();
+        }
+      })
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "room_members",
-          filter: `user_id=eq.${session.user.id}`,
-        },
+        { event: "INSERT", schema: "public", table: "messages" },
         () => fetchRooms(),
       )
       .on(
@@ -72,7 +74,19 @@ export default function ChatsScreen() {
         {
           event: "INSERT",
           schema: "public",
-          table: "messages",
+          table: "room_members",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        () => fetchRooms(),
+      )
+      // إضافة مستمع لإنشاء الغرف (للمالك)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "rooms",
+          filter: `created_by=eq.${session.user.id}`,
         },
         () => fetchRooms(),
       )
@@ -81,47 +95,7 @@ export default function ChatsScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [session?.user?.id]);
-  useEffect(() => {
-    const channel = supabase
-      .channel("my_rooms")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "room_members",
-          filter: `user_id=eq.${session?.user?.id}`,
-        },
-        () => {
-          fetchRooms();
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [session]);
-
-  useEffect(() => {
-    fetchRooms();
-
-    const channel = supabase
-      .channel("schema-db-changes")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        () => {
-          fetchRooms();
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, fetchRooms]);
 
   const confirmDeleteRoom = (roomId: string, roomName: string) => {
     Alert.alert(
@@ -133,14 +107,18 @@ export default function ChatsScreen() {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            const { error } = await deleteRoom(roomId);
-            if (error) Alert.alert("Error", "Failed to delete room");
-            else fetchRooms();
+            const ownerName = await getUsernameById(session?.user?.id!);
+            const { error } = await deleteRoom(roomId, ownerName);
+            if (!error) fetchRooms();
           },
         },
       ],
     );
   };
+
+  const filteredRooms = rooms.filter((room) =>
+    room.rooms?.name?.toLowerCase().includes(search.toLowerCase()),
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -162,18 +140,12 @@ export default function ChatsScreen() {
       </View>
 
       <FlatList
-        data={rooms}
+        data={filteredRooms}
         keyExtractor={(item) => item.room_id}
         refreshing={loading}
         onRefresh={fetchRooms}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No messages yet</Text>
-          </View>
-        }
         renderItem={({ item }) => {
           const lastMsg = item.rooms?.messages?.[0];
-
           return (
             <ChatItem
               name={item.rooms?.name || "Group"}
@@ -194,6 +166,11 @@ export default function ChatsScreen() {
             />
           );
         }}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No messages yet</Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );

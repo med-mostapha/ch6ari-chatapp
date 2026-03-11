@@ -32,14 +32,24 @@ export default function ChatDetailScreen() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [roomOwner, setRoomOwner] = useState<string | null>(null);
-
   const [detailsVisible, setDetailsVisible] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !session?.user?.id) return;
 
-    const roomDeleteChannel = supabase
-      .channel(`room-termination-${id}`)
+    fetchRoomDetails();
+    fetchMessages();
+
+    const channel = supabase
+      .channel(`room-events-${id}`, {
+        config: { broadcast: { self: true } },
+      })
+      .on("broadcast", { event: "user-kicked" }, (payload) => {
+        if (payload.payload.userId === session.user.id) {
+          Alert.alert("Notice", "You have been removed from this chat.");
+          router.replace("/chats");
+        }
+      })
       .on(
         "postgres_changes",
         {
@@ -53,34 +63,18 @@ export default function ChatDetailScreen() {
           router.replace("/chats");
         },
       )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(roomDeleteChannel);
-    };
-  }, [id]);
-
-  useEffect(() => {
-    const appStateSub = AppState.addEventListener("change", (nextAppState) => {
-      if (nextAppState === "active") {
-        fetchMessages();
-      }
-    });
-
-    fetchRoomDetails();
-    fetchMessages();
-
-    const channel = supabase
-      .channel(`room-${id}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "messages",
-          filter: `room_id=eq.${id}`,
         },
         async (payload) => {
+          if (payload.new.room_id !== id) return;
+
+          console.log("New Live Message Received!");
+
           const { data: profile } = await supabase
             .from("profiles")
             .select("username")
@@ -94,11 +88,10 @@ export default function ChatDetailScreen() {
 
           setMessages((prev) => {
             if (prev.some((m) => m.id === payload.new.id)) return prev;
-
-            const filtered = prev.filter(
-              (m) => !m.id.toString().startsWith("temp-"),
-            );
-            return [...filtered, msgWithProfile];
+            return [
+              ...prev.filter((m) => !m.id.toString().startsWith("temp-")),
+              msgWithProfile,
+            ];
           });
 
           setTimeout(
@@ -114,13 +107,19 @@ export default function ChatDetailScreen() {
           setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Chat Channel Status:", status);
+      });
+
+    const appStateSub = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") fetchMessages();
+    });
 
     return () => {
       appStateSub.remove();
       supabase.removeChannel(channel);
     };
-  }, [id]);
+  }, [id, session?.user?.id]);
 
   const fetchRoomDetails = async () => {
     const { data } = await supabase
@@ -141,8 +140,12 @@ export default function ChatDetailScreen() {
 
       if (error) throw error;
       if (data) setMessages(data);
+      setTimeout(
+        () => flatListRef.current?.scrollToEnd({ animated: false }),
+        200,
+      );
     } catch (error) {
-      Alert.alert("Error", "Failed to load chat history.");
+      console.log("Error loading messages");
     }
   };
 
@@ -164,6 +167,7 @@ export default function ChatDetailScreen() {
     };
 
     setMessages((prev) => [...prev, tempMsg]);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
 
     const { error } = await sendMessage(id as string, session.user.id, content);
     setIsSending(false);
@@ -171,8 +175,7 @@ export default function ChatDetailScreen() {
     if (error) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setNewMessage(content);
-      Alert.alert("Failed to send", "Please check your connection.");
-      router.back();
+      Alert.alert("Error", "Message not sent.");
     }
   };
 
@@ -247,7 +250,6 @@ export default function ChatDetailScreen() {
                     />
                   </TouchableOpacity>
                 )}
-                {/* أيقونة التفاصيل */}
                 <TouchableOpacity onPress={() => setDetailsVisible(true)}>
                   <Ionicons
                     name="information-circle-outline"
