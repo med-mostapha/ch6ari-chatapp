@@ -37,6 +37,7 @@ export const getUserRooms = async (userId: string) => {
       rooms (
         id,
         name,
+        is_group,
         messages (
           content,
           created_at
@@ -93,36 +94,47 @@ export const startNewChat = async (
   targetUserName: string,
 ) => {
   try {
-    const { data: existingRooms, error: searchError } = await supabase.rpc(
-      "get_existing_chat_room",
-      {
-        user1: currentUserId,
-        user2: targetUserId,
-      },
-    );
+    const { data: existingRooms } = await supabase
+      .from("room_members")
+      .select("room_id, rooms!inner(is_group)")
+      .eq("user_id", currentUserId)
+      .eq("rooms.is_group", false);
 
-    if (existingRooms && existingRooms.length > 0) {
-      return { data: existingRooms[0], error: null };
+    let targetRoom = null;
+    if (existingRooms) {
+      for (const r of existingRooms) {
+        const { data: member } = await supabase
+          .from("room_members")
+          .select("id")
+          .eq("room_id", r.room_id)
+          .eq("user_id", targetUserId)
+          .single();
+        if (member) {
+          targetRoom = r;
+          break;
+        }
+      }
+    }
+
+    if (targetRoom) {
+      return { data: { id: targetRoom.room_id }, error: null };
     }
 
     const { data: room, error: roomError } = await supabase
       .from("rooms")
-      .insert([{ name: targetUserName || "New Chat" }])
+      .insert([{ name: targetUserName, is_group: false }])
       .select()
       .single();
 
     if (roomError) throw roomError;
 
-    const { error: membersError } = await supabase.from("room_members").insert([
+    await supabase.from("room_members").insert([
       { room_id: room.id, user_id: currentUserId },
       { room_id: room.id, user_id: targetUserId },
     ]);
 
-    if (membersError) throw membersError;
-
     return { data: room, error: null };
   } catch (error) {
-    console.error("Error starting chat:", error);
     return { data: null, error };
   }
 };
@@ -146,6 +158,7 @@ export const createRoom = async (name: string, userId: string) => {
         {
           name,
           created_by: userId,
+          is_group: true,
         },
       ])
       .select()
