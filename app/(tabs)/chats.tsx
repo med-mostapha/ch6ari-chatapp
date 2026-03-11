@@ -53,6 +53,52 @@ export default function ChatsScreen() {
   };
 
   useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const channel = supabase
+      .channel("realtime-rooms")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_members",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        () => {
+          fetchRooms();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("my_rooms")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_members",
+          filter: `user_id=eq.${session?.user?.id}`,
+        },
+        () => {
+          fetchRooms();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
+
+  useEffect(() => {
     fetchRooms();
 
     const channel = supabase
