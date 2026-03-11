@@ -1,8 +1,14 @@
 import { useAuth } from "@/context/AuthContext";
-import { createRoom, searchUsers, startNewChat } from "@/services/chat";
+import {
+  createRoom,
+  inviteUserToRoom,
+  searchUsers,
+  startNewChat,
+} from "@/services/chat";
+import { supabase } from "@/services/supabaseClient";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,14 +23,28 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function NewChatScreen() {
+  const { roomId } = useLocalSearchParams();
+  const { session } = useAuth();
+  const router = useRouter();
+
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const [currentUsername, setCurrentUsername] = useState("");
 
-  const { session } = useAuth();
-  const router = useRouter();
+  useEffect(() => {
+    const getProfile = async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", session?.user?.id)
+        .single();
+      if (data) setCurrentUsername(data.username);
+    };
+    getProfile();
+  }, [session]);
 
   const handleSearch = async (text: string) => {
     setQuery(text);
@@ -38,40 +58,64 @@ export default function NewChatScreen() {
     setLoading(false);
   };
 
-  const handleCreateGroup = async () => {
-    if (!groupName.trim() || !session?.user?.id) return;
-
-    setLoading(true);
-    const { data, error } = await createRoom(groupName.trim(), session.user.id);
-    setLoading(false);
-    setModalVisible(false);
-
-    if (data) {
-      router.replace(`/chat/${data.id}`);
-    } else {
-      Alert.alert("Error", "Could not create group");
-    }
-  };
-
-  const handleCreateChat = async (targetUser: any) => {
+  const handleAction = async (targetUser: any) => {
     if (!session?.user?.id) return;
 
     setLoading(true);
-    const { data, error } = await startNewChat(
-      session.user.id,
-      targetUser.id,
-      targetUser.username,
-    );
-    setLoading(false);
 
-    if (data) {
+    if (roomId) {
+      const { error } = await inviteUserToRoom(
+        roomId as string,
+        targetUser.id,
+        session.user.id,
+        currentUsername,
+        targetUser.username,
+      );
+      setLoading(false);
+
+      if (error) {
+        Alert.alert("Notice", "Failed to add member");
+      } else {
+        router.back();
+      }
+    } else {
+      const { data, error } = await startNewChat(
+        session.user.id,
+        targetUser.id,
+        targetUser.username,
+      );
+      setLoading(false);
+      if (data) router.replace(`/chat/${data.id}`);
+    }
+  };
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim() || !session?.user?.id) return;
+    setLoading(true);
+    const { data, error } = await createRoom(groupName.trim(), session.user.id);
+
+    if (data && !error) {
+      await supabase.from("messages").insert([
+        {
+          room_id: data.id,
+          user_id: session.user.id,
+          content: `${currentUsername} created the group "${groupName.trim()}"`,
+          type: "system",
+        },
+      ]);
+
+      setLoading(false);
+      setModalVisible(false);
       router.replace(`/chat/${data.id}`);
+    } else {
+      setLoading(false);
+      Alert.alert("Error", "Could not create group");
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>New Group</Text>
@@ -104,7 +148,9 @@ export default function NewChatScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="close" size={28} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.title}>New Message</Text>
+        <Text style={styles.title}>
+          {roomId ? "Add Member" : "New Message"}
+        </Text>
         <View style={{ width: 28 }} />
       </View>
 
@@ -122,26 +168,28 @@ export default function NewChatScreen() {
         data={users}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
-          <TouchableOpacity
-            style={styles.groupOption}
-            onPress={() => setModalVisible(true)}
-          >
-            <View style={styles.groupIcon}>
-              <Ionicons name="people" size={24} color="#fff" />
-            </View>
-            <Text style={styles.groupText}>Create New Group</Text>
-          </TouchableOpacity>
+          !roomId ? (
+            <TouchableOpacity
+              style={styles.groupOption}
+              onPress={() => setModalVisible(true)}
+            >
+              <View style={styles.groupIcon}>
+                <Ionicons name="people" size={24} color="#fff" />
+              </View>
+              <Text style={styles.groupText}>Create New Group</Text>
+            </TouchableOpacity>
+          ) : null
         }
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.userItem}
-            onPress={() => handleCreateChat(item)}
+            onPress={() => handleAction(item)}
           >
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{item.username?.[0]}</Text>
             </View>
             <Text style={styles.userName}>{item.username}</Text>
-            <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+            <Ionicons name="add-circle-outline" size={24} color="#2563EB" />
           </TouchableOpacity>
         )}
       />
@@ -212,7 +260,6 @@ const styles = StyleSheet.create({
     left: "50%",
     transform: [{ translateX: -25 }, { translateY: -25 }],
   },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
