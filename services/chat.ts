@@ -13,17 +13,62 @@ export const deleteMessages = async (messageIds: string[]) => {
   }
 };
 
-export const deleteRoom = async (roomId: string) => {
+export const deleteRoom = async (roomId: string, ownerName: string) => {
   try {
-    await supabase.from("messages").delete().eq("room_id", roomId);
+    await supabase.from("messages").insert([
+      {
+        room_id: roomId,
+        content: `⚠️ ${ownerName} has deleted this group.`,
+        type: "system",
+      },
+    ]);
 
-    await supabase.from("room_members").delete().eq("room_id", roomId);
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     const { error } = await supabase.from("rooms").delete().eq("id", roomId);
 
+    if (error) {
+      console.error("Supabase Delete Error:", error);
+      return { error };
+    }
+
+    return { error: null };
+  } catch (error) {
+    console.error("Catch Delete Error:", error);
+    return { error };
+  }
+};
+
+export const kickUser = async (
+  roomId: string,
+  targetUserId: string,
+  targetUserName: string,
+  ownerName: string,
+) => {
+  try {
+    await supabase.from("messages").insert([
+      {
+        room_id: roomId,
+        user_id: null,
+        content: `🚫 ${ownerName} removed ${targetUserName} from the group.`,
+        type: "system",
+      },
+    ]);
+
+    await supabase.channel(`room-events-${roomId}`).send({
+      type: "broadcast",
+      event: "user-kicked",
+      payload: { userId: targetUserId },
+    });
+
+    const { error } = await supabase
+      .from("room_members")
+      .delete()
+      .match({ room_id: roomId, user_id: targetUserId });
+
     return { error };
   } catch (error) {
-    console.error("Critical Delete Error:", error);
+    console.error("Kick Error:", error);
     return { error };
   }
 };
@@ -176,6 +221,14 @@ export const createRoom = async (name: string, userId: string) => {
   }
 };
 
+export const notifyRefresh = async (userId: string) => {
+  await supabase.channel("global-sync").send({
+    type: "broadcast",
+    event: "refresh-chats",
+    payload: { userId },
+  });
+};
+
 export const inviteUserToRoom = async (
   roomId: string,
   targetUserId: string,
@@ -183,21 +236,43 @@ export const inviteUserToRoom = async (
   inviterName: string,
   targetUserName: string,
 ) => {
-  const { error } = await supabase
-    .from("room_members")
-    .insert([{ room_id: roomId, user_id: targetUserId }]);
-  if (error) return { error };
+  try {
+    const { data: existingMember } = await supabase
+      .from("room_members")
+      .select("id")
+      .match({ room_id: roomId, user_id: targetUserId })
+      .single();
 
-  await supabase.from("messages").insert([
-    {
-      room_id: roomId,
-      user_id: inviterId,
-      content: `${inviterName} added ${targetUserName}`,
-      type: "system",
-    },
-  ]);
+    if (existingMember) {
+      return { error: "User is already in this room" };
+    }
 
-  return { error: null };
+    const { error: inviteError } = await supabase
+      .from("room_members")
+      .insert([{ room_id: roomId, user_id: targetUserId }]);
+
+    if (inviteError) return { error: inviteError };
+
+    await supabase.from("messages").insert([
+      {
+        room_id: roomId,
+        user_id: null,
+        content: `➕ ${inviterName} added ${targetUserName}`,
+        type: "system",
+      },
+    ]);
+
+    await supabase.channel("global-sync").send({
+      type: "broadcast",
+      event: "refresh-chats",
+      payload: { userId: targetUserId },
+    });
+
+    return { error: null };
+  } catch (error) {
+    console.error("Invite Error:", error);
+    return { error };
+  }
 };
 
 export const getRoomMembers = async (roomId: string) => {
@@ -237,7 +312,8 @@ export const leaveRoom = async (
 ) => {
   try {
     if (isOwner) {
-      return await deleteRoom(roomId);
+      const ownerName = await getUsernameById(userId);
+      return await deleteRoom(roomId, ownerName);
     } else {
       const username = await getUsernameById(userId);
 
