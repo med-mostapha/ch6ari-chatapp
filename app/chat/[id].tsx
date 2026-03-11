@@ -89,16 +89,22 @@ export default function ChatDetailScreen() {
 
           const msgWithProfile = {
             ...payload.new,
-            profiles: profile,
+            profiles: profile || { username: "User" },
           };
 
           setMessages((prev) => {
             if (prev.some((m) => m.id === payload.new.id)) return prev;
-            return [
-              ...prev.filter((m) => !m.id.toString().startsWith("temp-")),
-              msgWithProfile,
-            ];
+
+            const filtered = prev.filter(
+              (m) => !m.id.toString().startsWith("temp-"),
+            );
+            return [...filtered, msgWithProfile];
           });
+
+          setTimeout(
+            () => flatListRef.current?.scrollToEnd({ animated: true }),
+            100,
+          );
         },
       )
       .on(
@@ -166,6 +172,7 @@ export default function ChatDetailScreen() {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setNewMessage(content);
       Alert.alert("Failed to send", "Please check your connection.");
+      router.back();
     }
   };
 
