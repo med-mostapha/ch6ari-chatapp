@@ -17,6 +17,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -157,7 +158,7 @@ export default function RegisterScreen() {
             <LottieView
               ref={animation}
               source={require("../../assets/icons/singing-contract.json")}
-              style={{ width: 150, height: 150 }}
+              style={styles.lottie}
               autoPlay
               loop
             />
@@ -267,6 +268,10 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
+  lottie: {
+    width: 150,
+    height: 150,
+  } as ViewStyle,
   safeArea: { flex: 1, backgroundColor: "#FFFFFF" },
   container: { flex: 1 },
   scrollContainer: { flexGrow: 1, paddingHorizontal: 28, paddingBottom: 40 },
