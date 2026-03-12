@@ -4,6 +4,7 @@ import { deleteRoom, getUsernameById, getUserRooms } from "@/services/chat";
 import { supabase } from "@/services/supabaseClient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import LottieView from "lottie-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
@@ -13,6 +14,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -79,7 +81,6 @@ export default function ChatsScreen() {
         },
         () => fetchRooms(),
       )
-      // إضافة مستمع لإنشاء الغرف (للمالك)
       .on(
         "postgres_changes",
         {
@@ -169,6 +170,12 @@ export default function ChatsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No messages yet</Text>
+            <LottieView
+              source={require("../../assets/icons/singing-contract.json")}
+              style={styles.emptyLottie}
+              autoPlay
+              loop
+            />
           </View>
         }
       />
@@ -177,6 +184,10 @@ export default function ChatsScreen() {
 }
 
 const styles = StyleSheet.create({
+  emptyLottie: {
+    width: 200,
+    height: 200,
+  } as ViewStyle,
   container: { flex: 1, backgroundColor: "#FFFFFF" },
   header: {
     flexDirection: "row",

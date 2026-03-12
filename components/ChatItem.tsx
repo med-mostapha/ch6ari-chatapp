@@ -55,6 +55,7 @@ export const ChatItem = ({
           <Text style={styles.lastMessage} numberOfLines={1}>
             {lastMessage}
           </Text>
+
           {unreadCount ? (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{unreadCount}</Text>
