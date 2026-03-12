@@ -1,4 +1,5 @@
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import * as Linking from "expo-linking";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
@@ -9,15 +10,27 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      const data = Linking.parse(event.url);
+      if (data.path === "reset-password") {
+        router.replace("/(auth)/reset-password");
+      }
+    };
+
+    const subscription = Linking.addEventListener("url", handleDeepLink);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
     if (loading) return;
 
     const inAuthGroup = segments[0] === "(auth)";
 
+    const isResetting = segments[1] === "reset-password";
+
     if (!session && !inAuthGroup) {
-      // Not logged in -> Redirect to login
       router.replace("/(auth)/login");
-    } else if (session && inAuthGroup) {
-      // Logged in but trying to access login/register -> Redirect to home
+    } else if (session && inAuthGroup && !isResetting) {
       router.replace("/(tabs)/chats");
     }
   }, [session, loading, segments]);
@@ -35,14 +48,12 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="chat"
-        options={{ headerShown: false, headerBackButtonDisplayMode: "minimal" }}
-      />
+      <Stack.Screen name="chat" options={{ headerShown: false }} />
       <Stack.Screen
         name="new-chat"
         options={{ headerShown: false, presentation: "modal" }}
       />
+      <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
     </Stack>
   );
 }
