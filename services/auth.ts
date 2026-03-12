@@ -37,7 +37,7 @@ export const getCurrentUser = async () => {
 
 export const resetPassword = async (email: string) => {
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: "chatapp://reset-password",
+    redirectTo: "chatapp://--/reset-password",
   });
   return { data, error };
 };
