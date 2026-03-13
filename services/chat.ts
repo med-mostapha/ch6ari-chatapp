@@ -76,27 +76,37 @@ export const kickUser = async (
 export const getUserRooms = async (userId: string) => {
   const { data, error } = await supabase
     .from("room_members")
-    .select(
-      `
-      room_id,
-      rooms (
-        id,
-        name,
-        is_group,
-        messages (
-          content,
-          created_at
-        )
-      )
-    `,
+.select(`
+  room_id,
+  rooms (
+    id,
+    name,
+    is_group,
+    last_message_at,
+    created_at,
+    messages (
+      content,
+      created_at,
+      is_read,
+      user_id
+    ),
+    room_members (
+      user_id,
+      profiles:user_id (username)
     )
-    .eq("user_id", userId)
-    .order("created_at", {
-      referencedTable: "rooms.messages",
-      ascending: false,
-    });
+  )
+`)
+    .eq("user_id", userId);
 
-  return { data, error };
+  if (error || !data) return { data: null, error };
+
+  const sortedData = [...data].sort((a: any, b: any) => {
+    const timeA = new Date(a.rooms?.last_message_at || a.rooms?.created_at || 0).getTime();
+    const timeB = new Date(b.rooms?.last_message_at || b.rooms?.created_at || 0).getTime();
+    return timeB - timeA;
+  });
+
+  return { data: sortedData, error: null };
 };
 
 export const getRoomMessages = async (roomId: string) => {
@@ -120,6 +130,17 @@ export const getRoomMessages = async (roomId: string) => {
   return { data, error };
 };
 
+export const markMessagesAsRead = async (roomId: string, userId: string) => {
+  const { error } = await supabase
+    .from("messages")
+    .update({ is_read: true })
+    .match({ room_id: roomId })
+    .neq("user_id", userId)
+    .eq("is_read", false);
+
+  return { error };
+};
+
 export const sendMessage = async (
   roomId: string,
   userId: string,
@@ -130,6 +151,14 @@ export const sendMessage = async (
     .insert([
       { room_id: roomId, user_id: userId, content: content, type: "text" },
     ]);
+
+  if (!error) {
+    await supabase
+      .from("rooms")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", roomId);
+  }
+
   return { data, error };
 };
 
