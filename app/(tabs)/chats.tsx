@@ -24,9 +24,18 @@ interface RoomData {
     id: string;
     name: string;
     is_group: boolean;
+    last_message_at: string;
     messages: {
       content: string;
       created_at: string;
+      is_read: boolean;
+      user_id: string;
+    }[];
+    room_members: {
+      user_id: string;
+      profiles: {
+        username: string;
+      };
     }[];
   };
 }
@@ -61,11 +70,19 @@ export default function ChatsScreen() {
       .channel("global-sync", {
         config: { broadcast: { self: true } },
       })
-      .on("broadcast", { event: "refresh-chats" }, (payload) => {
-        if (payload.payload.userId === session.user.id) {
-          fetchRooms();
-        }
-      })
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "rooms" },
+        () => fetchRooms(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          console.log("New message detected!", payload.new.content);
+          setTimeout(() => fetchRooms(), 300);
+        },
+      )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
@@ -81,15 +98,18 @@ export default function ChatsScreen() {
         },
         () => fetchRooms(),
       )
+      .on("broadcast", { event: "refresh-chats" }, (payload) => {
+        if (payload.payload.userId === session.user.id) {
+          fetchRooms();
+        }
+      })
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "rooms",
-          filter: `created_by=eq.${session.user.id}`,
+        { event: "UPDATE", schema: "public", table: "messages" },
+        (payload) => {
+          console.log("Message updated (read status), refreshing rooms...");
+          fetchRooms();
         },
-        () => fetchRooms(),
       )
       .subscribe();
 
@@ -146,18 +166,41 @@ export default function ChatsScreen() {
         refreshing={loading}
         onRefresh={fetchRooms}
         renderItem={({ item }) => {
-          const lastMsg = item.rooms?.messages?.[0];
+          const sortedMessages = [...(item.rooms?.messages || [])].sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          );
+          const lastMsg = sortedMessages[0];
+
+          let displayName = item.rooms?.name;
+
+          if (!item.rooms?.is_group) {
+            const otherMember = item.rooms?.room_members?.find(
+              (m: any) => m.user_id !== session?.user?.id,
+            );
+            displayName = otherMember?.profiles?.username || "Unknown User";
+          }
+
+          const unreadCount = item.rooms?.messages?.filter(
+            (m) => !m.is_read && m.user_id !== session?.user?.id,
+          ).length;
+
           return (
             <ChatItem
-              name={item.rooms?.name || "Group"}
+              name={displayName}
               isGroup={item.rooms?.is_group}
               lastMessage={lastMsg?.content || "No messages yet"}
+              unreadCount={unreadCount > 0 ? unreadCount : undefined}
               time={
-                lastMsg
-                  ? new Date(lastMsg.created_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
+                item.rooms?.last_message_at
+                  ? new Date(item.rooms.last_message_at).toLocaleTimeString(
+                      [],
+                      {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      },
+                    )
                   : ""
               }
               onPress={() => router.push(`/chat/${item.room_id}`)}
