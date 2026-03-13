@@ -6,11 +6,15 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "chatapp",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.mohamed.chatapp",
       "icon": {
         "dark": "./assets/ios/ios-dark.png",
         "light": "./assets/ios/ios-light.png",
@@ -18,10 +22,10 @@
       }
     },
     "android": {
+      "package": "com.mohamed.chatapp",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/android/adaptive-icon.png",
-        // "backgroundImage": "./assets/android/adaptive-icon.png",
         "monochromeImage": "./assets/android/adaptive-icon.png"
       },
       "edgeToEdgeEnabled": true,
@@ -36,12 +40,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/icons/splash-icon-dark.png",
+          "image": "./assets/icons/splash-icon-light.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
           "dark": {
-            "image": "./assets/icons/splash-icon-light.png",
+            "image": "./assets/icons/splash-icon-dark.png",
             "backgroundColor": "#000000"
           }
         }
@@ -51,6 +55,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2efa3fcd-74dc-4729-91e6-19c4fa859995"
+      }
     }
   }
 }
