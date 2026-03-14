@@ -10,6 +10,7 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -21,8 +22,159 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// ─── Design Tokens (shared across all auth screens) ──────────────────────────
+const COLORS = {
+  bg: "#0A0A0F",
+  surface: "#13131A",
+  inputBg: "#1C1C27",
+  border: "#2A2A3D",
+  borderValid: "#34D399",
+  borderInvalid: "#F87171",
+  accent: "#6C63FF",
+  accentLight: "#8B83FF",
+  textPrimary: "#F1F1F5",
+  textSecondary: "#8B8B9E",
+  textMuted: "#5A5A72",
+  white: "#FFFFFF",
+  error: "#F87171",
+  success: "#34D399",
+};
+
 type ValidationStatus = "default" | "valid" | "invalid";
 
+// ─── Reusable Animated Press Button ──────────────────────────────────────────
+function PrimaryButton({
+  onPress,
+  loading,
+  label,
+  disabled,
+}: {
+  onPress: () => void;
+  loading: boolean;
+  label: string;
+  disabled: boolean;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const onPressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      speed: 50,
+    }).start();
+  };
+
+  const onPressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 50,
+    }).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      disabled={disabled}
+    >
+      <Animated.View
+        style={[
+          styles.button,
+          disabled && styles.buttonDisabled,
+          { transform: [{ scale }] },
+        ]}
+      >
+        {loading ? (
+          <ActivityIndicator color={COLORS.white} />
+        ) : (
+          <Text style={styles.buttonText}>{label}</Text>
+        )}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// ─── Reusable Input Field ─────────────────────────────────────────────────────
+function InputField({
+  label,
+  status,
+  children,
+}: {
+  label: string;
+  status: ValidationStatus;
+  children: React.ReactNode;
+}) {
+  const borderColor =
+    status === "valid"
+      ? COLORS.borderValid
+      : status === "invalid"
+        ? COLORS.borderInvalid
+        : COLORS.border;
+
+  return (
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={[styles.inputWrapper, { borderColor }]}>
+        {status !== "default" && (
+          <View
+            style={[
+              styles.statusDot,
+              {
+                backgroundColor:
+                  status === "valid"
+                    ? COLORS.borderValid
+                    : COLORS.borderInvalid,
+              },
+            ]}
+          />
+        )}
+        {children}
+      </View>
+    </View>
+  );
+}
+
+// ─── Password Strength Indicator ──────────────────────────────────────────────
+function PasswordStrength({ password }: { password: string }) {
+  const getStrength = () => {
+    if (password.length === 0) return 0;
+    if (password.length < 6) return 1;
+    if (password.length < 10) return 2;
+    return 3;
+  };
+
+  const strength = getStrength();
+  const labels = ["", "Weak", "Good", "Strong"];
+  const colors = ["", COLORS.error, "#FBBF24", COLORS.success];
+
+  if (password.length === 0) return null;
+
+  return (
+    <View style={styles.strengthContainer}>
+      <View style={styles.strengthBars}>
+        {[1, 2, 3].map((i) => (
+          <View
+            key={i}
+            style={[
+              styles.strengthBar,
+              {
+                backgroundColor:
+                  i <= strength ? colors[strength] : COLORS.border,
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <Text style={[styles.strengthLabel, { color: colors[strength] }]}>
+        {labels[strength]}
+      </Text>
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,7 +182,6 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Validation States
   const [emailStatus, setEmailStatus] = useState<ValidationStatus>("default");
   const [passwordStatus, setPasswordStatus] =
     useState<ValidationStatus>("default");
@@ -42,7 +193,6 @@ export default function RegisterScreen() {
   const animation = useRef<LottieView>(null);
   const shakeAnimation = useRef(new Animated.Value(0)).current;
 
-  // Shake Logic
   const triggerShake = () => {
     Animated.sequence([
       Animated.timing(shakeAnimation, {
@@ -69,8 +219,7 @@ export default function RegisterScreen() {
   };
 
   const validateInputs = () => {
-    const emailRegex = /\S+@\S+\.\S+/;
-    const isEmailValid = emailRegex.test(email);
+    const isEmailValid = /\S+@\S+\.\S+/.test(email);
     const isUsernameValid = username.length >= 4;
     const isPasswordValid = password.length >= 6;
 
@@ -81,17 +230,16 @@ export default function RegisterScreen() {
     if (!isEmailValid || !isPasswordValid || !isUsernameValid) {
       triggerShake();
       setErrorMsg(
-        !isEmailValid
-          ? "Invalid email format"
-          : !isPasswordValid
-            ? "Password too short"
-            : "Username too short",
+        !isUsernameValid
+          ? "Username must be at least 4 characters"
+          : !isEmailValid
+            ? "Invalid email format"
+            : "Password must be at least 6 characters",
       );
-
-      // Reset after 3 seconds
       setTimeout(() => {
         setEmailStatus("default");
         setPasswordStatus("default");
+        setUsernameStatus("default");
         setErrorMsg("");
       }, 3000);
       return false;
@@ -101,27 +249,23 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!validateInputs()) return;
-
     setLoading(true);
 
     const { data, error } = await signUp(email, password, username);
 
     if (error) {
       setLoading(false);
-
       setEmailStatus("invalid");
       setUsernameStatus("invalid");
       setPasswordStatus("invalid");
-
-      Alert.alert("Error", error.message ?? "Registration failed");
+      setErrorMsg(error.message ?? "Registration failed");
+      triggerShake();
       return;
     }
 
     const user = data.user;
-
     if (user) {
       const { error: profileError } = await createProfile(user.id, username);
-
       if (profileError) {
         setLoading(false);
         Alert.alert("Profile Error", profileError.message);
@@ -130,134 +274,156 @@ export default function RegisterScreen() {
     }
 
     setLoading(false);
-
-    Alert.alert("Success", "Check your email to verify!", [
-      { text: "OK", onPress: () => router.replace("/login") },
-    ]);
-  };
-
-  const getBorderColor = (status: ValidationStatus) => {
-    if (status === "valid") return "#10B981";
-    if (status === "invalid") return "#EF4444";
-    return "#F3F4F6";
+    Alert.alert(
+      "✅ Almost there!",
+      "Check your email to verify your account.",
+      [{ text: "Got it", onPress: () => router.replace("/login") }],
+    );
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
       >
-        <StatusBar barStyle="dark-content" />
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* ── Lottie Animation ── */}
           <View style={styles.iconContainer}>
+            <View style={styles.lottieGlow} />
             <LottieView
               ref={animation}
               source={require("../../assets/icons/singing-contract.json")}
-              style={styles.lottie}
+              style={styles.lottie as ViewStyle}
               autoPlay
               loop
             />
           </View>
 
+          {/* ── Header ── */}
           <View style={styles.header}>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join us to get started</Text>
+            <Text style={styles.subtitle}>Join and start messaging today</Text>
           </View>
 
+          {/* ── Form Card ── */}
           <Animated.View
             style={[
-              styles.form,
+              styles.card,
               { transform: [{ translateX: shakeAnimation }] },
             ]}
           >
-            {/* Username Feild */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>User Name</Text>
+            {/* Username */}
+            <InputField label="Username" status={usernameStatus}>
+              <Ionicons
+                name="person-outline"
+                size={16}
+                color={COLORS.textMuted}
+                style={styles.fieldIcon}
+              />
               <TextInput
-                style={[
-                  styles.input,
-                  { borderColor: getBorderColor(usernameStatus) },
-                ]}
-                placeholder="Enter Username"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="ascii-capable"
+                style={styles.inputText}
+                placeholder="Min. 4 characters"
+                placeholderTextColor={COLORS.textMuted}
                 autoCapitalize="none"
                 value={username}
                 onChangeText={setUsername}
               />
-            </View>
+            </InputField>
 
-            {/* Email Field */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email Address</Text>
+            {/* Email */}
+            <InputField label="Email Address" status={emailStatus}>
+              <Ionicons
+                name="mail-outline"
+                size={16}
+                color={COLORS.textMuted}
+                style={styles.fieldIcon}
+              />
               <TextInput
-                style={[
-                  styles.input,
-                  { borderColor: getBorderColor(emailStatus) },
-                ]}
+                style={styles.inputText}
                 placeholder="name@example.com"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={COLORS.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
                 onChangeText={setEmail}
               />
-            </View>
+            </InputField>
 
-            {/* Password Field */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.passwordWrapper}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.passwordInput,
-                    { borderColor: getBorderColor(passwordStatus) },
-                  ]}
-                  placeholder="Min. 6 characters"
-                  placeholderTextColor="#9CA3AF"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
+            {/* Password */}
+            <InputField label="Password" status={passwordStatus}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={16}
+                color={COLORS.textMuted}
+                style={styles.fieldIcon}
+              />
+              <TextInput
+                style={[styles.inputText, styles.passwordInput]}
+                placeholder="Min. 6 characters"
+                placeholderTextColor={COLORS.textMuted}
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-outline" : "eye-off-outline"}
+                  size={20}
+                  color={COLORS.textSecondary}
                 />
-                <TouchableOpacity
-                  style={styles.eyeBtn}
-                  onPress={() => setShowPassword(!showPassword)}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye" : "eye-off"}
-                    size={22}
-                    color="#9CA3AF"
-                  />
-                </TouchableOpacity>
+              </TouchableOpacity>
+            </InputField>
+
+            {/* Password strength indicator */}
+            <PasswordStrength password={password} />
+
+            {/* Error Message */}
+            {errorMsg ? (
+              <View style={styles.errorContainer}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={14}
+                  color={COLORS.error}
+                />
+                <Text style={styles.errorText}>{errorMsg}</Text>
               </View>
+            ) : null}
+
+            {/* Register Button */}
+            <PrimaryButton
+              label="Create Account"
+              onPress={handleRegister}
+              loading={loading}
+              disabled={loading}
+            />
+
+            {/* Divider */}
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
             </View>
 
-            {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
-
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleRegister}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Sign Up</Text>
-              )}
-            </TouchableOpacity>
-
+            {/* Footer */}
             <TouchableOpacity
               onPress={() => router.replace("/login")}
               style={styles.footerLink}
+              activeOpacity={0.7}
             >
               <Text style={styles.footerText}>
-                Have an account? <Text style={styles.linkBold}>Login</Text>
+                Already have an account?{"  "}
+                <Text style={styles.linkBold}>Sign In</Text>
               </Text>
             </TouchableOpacity>
           </Animated.View>
@@ -267,60 +433,212 @@ export default function RegisterScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  lottie: {
-    width: 150,
-    height: 150,
-  } as ViewStyle,
-  safeArea: { flex: 1, backgroundColor: "#FFFFFF" },
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
   container: { flex: 1 },
-  scrollContainer: { flexGrow: 1, paddingHorizontal: 28, paddingBottom: 40 },
-  iconContainer: { alignItems: "center", marginTop: 20, marginBottom: 20 },
-  header: { marginBottom: 30, alignItems: "center" },
-  title: { fontSize: 28, fontWeight: "800", color: "#111827" },
-  subtitle: { fontSize: 14, color: "#6B7280", marginTop: 4 },
-  form: { width: "100%" },
-  inputGroup: { marginBottom: 20 },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
+  scrollContainer: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    justifyContent: "center",
+  },
+
+  // ── Lottie ──
+  iconContainer: {
+    alignItems: "center",
+    marginTop: 20,
     marginBottom: 8,
-    marginLeft: 4,
+    position: "relative",
   },
-  input: {
-    backgroundColor: "#F9FAFB",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 14,
+  lottieGlow: {
+    position: "absolute",
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: COLORS.accent,
+    opacity: 0.08,
+    top: 15,
+  },
+  lottie: {
+    width: 130,
+    height: 130,
+  },
+
+  // ── Header ──
+  header: {
+    alignItems: "center",
+    marginBottom: 28,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
     fontSize: 14,
-    color: "#111827",
-    borderWidth: 1.5,
+    color: COLORS.textSecondary,
+    marginTop: 6,
+    letterSpacing: 0.1,
   },
-  passwordWrapper: { justifyContent: "center" },
-  passwordInput: { paddingRight: 50 },
-  eyeBtn: { position: "absolute", right: 16 },
+
+  // ── Card ──
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+  },
+
+  // ── Input ──
+  inputGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    height: 52,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 8,
+  },
+  fieldIcon: {
+    marginRight: 10,
+  },
+  inputText: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    paddingVertical: 0,
+  },
+  passwordInput: {
+    paddingRight: 8,
+  },
+  eyeBtn: {
+    padding: 4,
+  },
+
+  // ── Password Strength ──
+  strengthContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: -8,
+    marginBottom: 14,
+  },
+  strengthBars: {
+    flexDirection: "row",
+    gap: 4,
+    flex: 1,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+  },
+  strengthLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+
+  // ── Error ──
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(248, 113, 113, 0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "rgba(248, 113, 113, 0.2)",
+  },
   errorText: {
-    color: "#EF4444",
-    textAlign: "center",
-    marginBottom: 10,
+    color: COLORS.error,
     fontSize: 13,
     fontWeight: "500",
+    flex: 1,
   },
+
+  // ── Button ──
   button: {
-    backgroundColor: "#2563EB",
+    backgroundColor: COLORS.accent,
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: "center",
-    marginTop: 10,
-    shadowColor: "#2563EB",
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: COLORS.accent,
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  buttonDisabled: { backgroundColor: "#93C5FD" },
-  buttonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
-  footerLink: { marginTop: 25 },
-  footerText: { textAlign: "center", color: "#6B7280", fontSize: 15 },
-  linkBold: { color: "#2563EB", fontWeight: "700" },
+  buttonDisabled: {
+    backgroundColor: "#3D3A6B",
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  buttonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+
+  // ── Divider ──
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 20,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  dividerText: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+
+  // ── Footer ──
+  footerLink: {
+    alignItems: "center",
+  },
+  footerText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
+  linkBold: {
+    color: COLORS.accent,
+    fontWeight: "700",
+  },
 });
