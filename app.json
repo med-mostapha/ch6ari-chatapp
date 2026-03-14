@@ -6,11 +6,8 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "chatapp",
-    "platforms": [
-      "ios",
-      "android"
-    ],
-    "userInterfaceStyle": "automatic",
+    "platforms": ["ios", "android"],
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
@@ -24,7 +21,7 @@
     "android": {
       "package": "com.mohamed.chatapp",
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "#0A0A0F",
         "foregroundImage": "./assets/android/adaptive-icon.png",
         "monochromeImage": "./assets/android/adaptive-icon.png"
       },
@@ -43,10 +40,10 @@
           "image": "./assets/icons/splash-icon-light.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#0A0A0F",
           "dark": {
             "image": "./assets/icons/splash-icon-dark.png",
-            "backgroundColor": "#000000"
+            "backgroundColor": "#0A0A0F"
           }
         }
       ],

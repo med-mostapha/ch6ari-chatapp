@@ -1,15 +1,8 @@
 /**
  * app/new-chat.tsx
- * Premium Dark Theme — New chat / add member modal screen
- *
- * Key upgrades:
- * - Full dark modal consistent with the design system
- * - Floating group creation card with icon instead of plain row
- * - User list items have dynamic avatar colors
- * - Search bar has focus state with accent border
- * - Group creation modal is dark with proper input styling
- * - Loading overlay is subtle (not a blocking spinner)
- * - Empty / hint state when query is too short
+ * Fix: Modal backdrop was overlapping the card using absoluteFill.
+ * Solution: The Pressable IS the overlay — nested Pressable on the
+ * card uses e.stopPropagation() to prevent taps inside from closing it.
  */
 
 import { useAuth } from "@/context/AuthContext";
@@ -49,7 +42,6 @@ const COLORS = {
   textMuted: "#5A5A72",
   white: "#FFFFFF",
   success: "#34D399",
-  successDim: "rgba(52, 211, 153, 0.12)",
 };
 
 const AVATAR_COLORS = [
@@ -109,7 +101,6 @@ export default function NewChatScreen() {
   const handleAction = async (targetUser: any) => {
     if (!session?.user?.id) return;
     setActionLoading(targetUser.id);
-
     if (roomId) {
       const { error } = await inviteUserToRoom(
         roomId as string,
@@ -136,7 +127,6 @@ export default function NewChatScreen() {
     if (!groupName.trim() || !session?.user?.id) return;
     setLoading(true);
     const { data, error } = await createRoom(groupName.trim(), session.user.id);
-
     if (data && !error) {
       await supabase.from("messages").insert([
         {
@@ -148,6 +138,7 @@ export default function NewChatScreen() {
       ]);
       setLoading(false);
       setModalVisible(false);
+      setGroupName("");
       router.replace(`/chat/${data.id}`);
     } else {
       setLoading(false);
@@ -155,21 +146,37 @@ export default function NewChatScreen() {
     }
   };
 
+  const closeModal = () => {
+    setModalVisible(false);
+    setGroupName("");
+  };
+
   const isAddMode = !!roomId;
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* ── Group Creation Modal ── */}
-      <Modal visible={modalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
+      {/* ────────────────────────────────────────────────────
+          ✅ FIXED MODAL
+          Pattern:
+            <Pressable overlay onPress=close>      ← dark bg, closes on tap outside
+              <Pressable card onPress=stopProp>    ← the card, blocks event bubbling
+                ...content...
+              </Pressable>
+            </Pressable>
+      ──────────────────────────────────────────────────── */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent
+        statusBarTranslucent
+      >
+        <Pressable style={styles.modalOverlay} onPress={closeModal}>
+          {/* Card — stopPropagation prevents taps here from reaching the overlay */}
           <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setModalVisible(false)}
-          />
-          <View style={styles.modalCard}>
-            {/* Modal handle */}
+            style={styles.modalCard}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHandle} />
-
             <Text style={styles.modalTitle}>New Group</Text>
             <Text style={styles.modalSubtitle}>
               Give your group a name to get started
@@ -180,7 +187,6 @@ export default function NewChatScreen() {
                 name="people-outline"
                 size={16}
                 color={COLORS.textMuted}
-                style={styles.modalInputIcon}
               />
               <TextInput
                 placeholder="Group name..."
@@ -195,10 +201,7 @@ export default function NewChatScreen() {
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                onPress={() => {
-                  setModalVisible(false);
-                  setGroupName("");
-                }}
+                onPress={closeModal}
                 style={styles.cancelBtn}
                 activeOpacity={0.7}
               >
@@ -220,8 +223,8 @@ export default function NewChatScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* ── Header ── */}
@@ -236,7 +239,6 @@ export default function NewChatScreen() {
         <Text style={styles.title}>
           {isAddMode ? "Add Member" : "New Message"}
         </Text>
-        {/* Spacer */}
         <View style={styles.closeBtn} />
       </View>
 
@@ -335,7 +337,6 @@ export default function NewChatScreen() {
         renderItem={({ item }) => {
           const avatarColor = getAvatarColor(item.username);
           const isActing = actionLoading === item.id;
-
           return (
             <TouchableOpacity
               style={styles.userRow}
@@ -343,7 +344,6 @@ export default function NewChatScreen() {
               activeOpacity={0.75}
               disabled={!!actionLoading}
             >
-              {/* Avatar */}
               <View
                 style={[styles.userAvatar, { backgroundColor: avatarColor }]}
               >
@@ -351,11 +351,7 @@ export default function NewChatScreen() {
                   {item.username?.charAt(0).toUpperCase()}
                 </Text>
               </View>
-
-              {/* Name */}
               <Text style={styles.userName}>{item.username}</Text>
-
-              {/* Action indicator */}
               {isActing ? (
                 <ActivityIndicator size="small" color={COLORS.accent} />
               ) : (
@@ -374,7 +370,6 @@ export default function NewChatScreen() {
         }}
       />
 
-      {/* Full-screen loading (initial search only) */}
       {loading && users.length === 0 && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.accent} />
@@ -385,12 +380,8 @@ export default function NewChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
+  safeArea: { flex: 1, backgroundColor: COLORS.bg },
 
-  // ── Header ──
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -418,11 +409,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
 
-  // ── Search ──
-  searchWrapper: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
+  searchWrapper: { paddingHorizontal: 20, paddingVertical: 14 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -434,9 +421,7 @@ const styles = StyleSheet.create({
     height: 48,
     gap: 10,
   },
-  searchBarFocused: {
-    borderColor: COLORS.accent,
-  },
+  searchBarFocused: { borderColor: COLORS.accent },
   searchInput: {
     flex: 1,
     fontSize: 15,
@@ -444,13 +429,8 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
 
-  // ── List ──
-  listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
+  listContent: { paddingHorizontal: 20, paddingBottom: 30 },
 
-  // ── Group card ──
   groupCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -470,21 +450,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  groupTextBlock: {
-    flex: 1,
-  },
-  groupTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  groupSubtitle: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginTop: 2,
-  },
+  groupTextBlock: { flex: 1 },
+  groupTitle: { fontSize: 15, fontWeight: "700", color: COLORS.textPrimary },
+  groupSubtitle: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
 
-  // ── User rows ──
   userRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -500,11 +469,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  userAvatarText: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: "700",
-  },
+  userAvatarText: { color: COLORS.white, fontSize: 18, fontWeight: "700" },
   userName: {
     flex: 1,
     fontSize: 15,
@@ -522,12 +487,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // ── Hint / Empty ──
-  hintContainer: {
-    alignItems: "center",
-    paddingTop: 48,
-    gap: 12,
-  },
+  hintContainer: { alignItems: "center", paddingTop: 48, gap: 12 },
   hintText: {
     fontSize: 14,
     color: COLORS.textMuted,
@@ -536,7 +496,6 @@ const styles = StyleSheet.create({
     maxWidth: 220,
   },
 
-  // ── Loading overlay ──
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
@@ -544,18 +503,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(10,10,15,0.6)",
   },
 
-  // ── Group creation modal ──
+  // ── Modal ──────────────────────────────────────────────────────────────────
+  // ✅ Overlay = the Pressable itself (full screen dark bg, closes on tap outside)
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.72)",
     justifyContent: "flex-end",
   },
+  // ✅ Card = nested Pressable, blocks event bubbling with e.stopPropagation()
   modalCard: {
     backgroundColor: COLORS.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 24,
-    paddingBottom: 36,
+    paddingBottom: 40,
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
@@ -576,11 +537,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     marginBottom: 4,
   },
-  modalSubtitle: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    marginBottom: 20,
-  },
+  modalSubtitle: { fontSize: 13, color: COLORS.textMuted, marginBottom: 20 },
   modalInputWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -593,18 +550,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     gap: 10,
   },
-  modalInputIcon: {},
   modalInput: {
     flex: 1,
     fontSize: 15,
     color: COLORS.textPrimary,
     paddingVertical: 0,
   },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-  },
+  modalButtons: { flexDirection: "row", justifyContent: "flex-end", gap: 12 },
   cancelBtn: {
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -613,11 +565,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  cancelText: {
-    color: COLORS.textSecondary,
-    fontWeight: "600",
-    fontSize: 14,
-  },
+  cancelText: { color: COLORS.textSecondary, fontWeight: "600", fontSize: 14 },
   createBtn: {
     paddingHorizontal: 24,
     paddingVertical: 12,
@@ -635,9 +583,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
-  createText: {
-    color: COLORS.white,
-    fontWeight: "700",
-    fontSize: 14,
-  },
+  createText: { color: COLORS.white, fontWeight: "700", fontSize: 14 },
 });
