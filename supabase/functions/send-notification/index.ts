@@ -20,6 +20,7 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     )
 
+  
     const { data: members, error: membersError } = await supabase
       .from("room_members")
       .select(`
@@ -39,6 +40,7 @@ Deno.serve(async (req: Request) => {
 
     console.log("Members fetched:", JSON.stringify(members))
 
+  
     const pushTokens: string[] = (members ?? [])
       .map((m: any) => m.profiles?.expo_push_token)
       .filter(
@@ -55,12 +57,14 @@ Deno.serve(async (req: Request) => {
       )
     }
 
+   
     const { data: sender } = await supabase
       .from("profiles")
       .select("username")
       .eq("id", record.user_id)
       .single()
 
+   
     const notifications = pushTokens.map((token) => ({
       to: token,
       sound: "default",
@@ -72,6 +76,7 @@ Deno.serve(async (req: Request) => {
       priority: "high",
     }))
 
+ 
     const expoRes = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: {
@@ -103,4 +108,3 @@ Deno.serve(async (req: Request) => {
     )
   }
 })
-

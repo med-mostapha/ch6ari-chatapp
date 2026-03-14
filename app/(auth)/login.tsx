@@ -39,7 +39,6 @@ const COLORS = {
 
 type ValidationStatus = "default" | "valid" | "invalid";
 
-// ─── Animated Press Button Component ─────────────────────────────────────────
 function PrimaryButton({
   onPress,
   loading,
