@@ -20,6 +20,7 @@
     },
     "android": {
       "package": "com.mohamed.chatapp",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0F",
         "foregroundImage": "./assets/android/adaptive-icon.png",
