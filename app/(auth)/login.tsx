@@ -247,7 +247,7 @@ export default function LoginScreen() {
             <View style={styles.lottieGlow} />
             <LottieView
               ref={animation}
-              source={require("../../assets/icons/business-analysis.json")}
+              source={require("../../assets/icons/loginicon.json")}
               style={styles.lottie as ViewStyle}
               autoPlay
               loop
@@ -375,21 +375,21 @@ const styles = StyleSheet.create({
   iconContainer: {
     alignItems: "center",
     marginTop: 20,
-    marginBottom: 8,
+    marginBottom: 35,
     position: "relative",
   },
   lottieGlow: {
     position: "absolute",
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 170,
+    height: 170,
+    borderRadius: 85,
     backgroundColor: COLORS.accent,
     opacity: 0.08,
-    top: 15,
+    top: 0,
   },
   lottie: {
-    width: 140,
-    height: 140,
+    width: 130,
+    height: 130,
   },
 
   // ── Header ──

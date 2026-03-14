@@ -22,7 +22,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// ─── Design Tokens (shared across all auth screens) ──────────────────────────
 const COLORS = {
   bg: "#0A0A0F",
   surface: "#13131A",
@@ -42,7 +41,6 @@ const COLORS = {
 
 type ValidationStatus = "default" | "valid" | "invalid";
 
-// ─── Reusable Animated Press Button ──────────────────────────────────────────
 function PrimaryButton({
   onPress,
   loading,
@@ -96,7 +94,6 @@ function PrimaryButton({
   );
 }
 
-// ─── Reusable Input Field ─────────────────────────────────────────────────────
 function InputField({
   label,
   status,
@@ -136,7 +133,6 @@ function InputField({
   );
 }
 
-// ─── Password Strength Indicator ──────────────────────────────────────────────
 function PasswordStrength({ password }: { password: string }) {
   const getStrength = () => {
     if (password.length === 0) return 0;
@@ -174,7 +170,6 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -356,7 +351,6 @@ export default function RegisterScreen() {
               />
             </InputField>
 
-            {/* Password */}
             <InputField label="Password" status={passwordStatus}>
               <Ionicons
                 name="lock-closed-outline"
@@ -385,7 +379,6 @@ export default function RegisterScreen() {
               </TouchableOpacity>
             </InputField>
 
-            {/* Password strength indicator */}
             <PasswordStrength password={password} />
 
             {/* Error Message */}
@@ -400,7 +393,6 @@ export default function RegisterScreen() {
               </View>
             ) : null}
 
-            {/* Register Button */}
             <PrimaryButton
               label="Create Account"
               onPress={handleRegister}
@@ -408,7 +400,6 @@ export default function RegisterScreen() {
               disabled={loading}
             />
 
-            {/* Divider */}
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or</Text>
@@ -433,7 +424,6 @@ export default function RegisterScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
