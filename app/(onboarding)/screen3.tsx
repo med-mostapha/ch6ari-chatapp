@@ -1,3 +1,10 @@
+import {
+  C,
+  DotIndicator,
+  FadeInLottie,
+  GlowOrb,
+  SlideText,
+} from "@/components/onboarding/shared";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import LottieView from "lottie-react-native";
@@ -14,17 +21,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { C, DotIndicator, FadeInLottie, GlowOrb, SlideText } from "./_shared";
-
-const ACCENT = C.accent3; // Amber for this screen
-
+const ACCENT = C.accent3; // Amber
 const ONBOARDING_KEY = "has_seen_onboarding";
 
 export default function OnboardingScreen3() {
   const router = useRouter();
   const lottieRef = useRef<LottieView>(null);
   const [loading, setLoading] = useState(false);
-
   const scale = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () =>
@@ -42,21 +45,23 @@ export default function OnboardingScreen3() {
 
   const handleGetStarted = async () => {
     setLoading(true);
-    // Mark onboarding as complete — index.tsx will read this
     await AsyncStorage.setItem(ONBOARDING_KEY, "true");
     setLoading(false);
-    // Navigate to login
+    router.replace("/(auth)/login");
+  };
+
+  const handleSignIn = async () => {
+    await AsyncStorage.setItem(ONBOARDING_KEY, "true");
     router.replace("/(auth)/login");
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* ── Ambient background orbs ── */}
       <GlowOrb color={ACCENT} size={320} top={-100} left={-60} delay={400} />
       <GlowOrb color={ACCENT} size={150} bottom={80} right={-40} delay={1200} />
 
       <View style={styles.container}>
-        {/* ── Top row: back only ── */}
+        {/* ── Top row ── */}
         <View style={styles.topRow}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -65,17 +70,15 @@ export default function OnboardingScreen3() {
           >
             <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
-          {/* Step counter */}
           <View style={styles.stepBadge}>
             <Text style={styles.stepText}>3 of 3</Text>
           </View>
         </View>
 
-        {/* ── Lottie illustration ── */}
+        {/* ── Lottie ── */}
         <FadeInLottie>
           <View style={styles.lottieContainer}>
             <View style={[styles.lottieRing, { borderColor: ACCENT + "35" }]} />
-            {/* Outer decorative ring */}
             <View
               style={[styles.lottieRingOuter, { borderColor: ACCENT + "15" }]}
             />
@@ -93,13 +96,10 @@ export default function OnboardingScreen3() {
         <View style={styles.textSection}>
           <SlideText
             title={"Never Miss\na Message"}
-            subtitle={
-              "Get instant push notifications so you're always the first to reply — even when the app is closed."
-            }
+            subtitle="Get instant push notifications so you're always the first to reply — even when the app is closed."
             delay={200}
           />
 
-          {/* Highlight card */}
           <View style={[styles.highlightCard, { borderColor: ACCENT + "30" }]}>
             <View
               style={[
@@ -120,11 +120,10 @@ export default function OnboardingScreen3() {
           </View>
         </View>
 
-        {/* ── Bottom section ── */}
+        {/* ── Bottom ── */}
         <View style={styles.bottomSection}>
           <DotIndicator total={3} current={2} accentColor={ACCENT} />
 
-          {/* Main CTA */}
           <Pressable
             onPress={handleGetStarted}
             onPressIn={onPressIn}
@@ -146,12 +145,8 @@ export default function OnboardingScreen3() {
             </Animated.View>
           </Pressable>
 
-          {/* Already have account */}
           <TouchableOpacity
-            onPress={async () => {
-              await AsyncStorage.setItem(ONBOARDING_KEY, "true");
-              router.replace("/(auth)/login");
-            }}
+            onPress={handleSignIn}
             activeOpacity={0.7}
             style={styles.loginLink}
           >
@@ -169,15 +164,8 @@ export default function OnboardingScreen3() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: C.bg,
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 28,
-    paddingBottom: 20,
-  },
+  safeArea: { flex: 1, backgroundColor: C.bg },
+  container: { flex: 1, paddingHorizontal: 28, paddingBottom: 20 },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -195,11 +183,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  backText: {
-    color: C.textPrimary,
-    fontSize: 18,
-    fontWeight: "700",
-  },
+  backText: { color: C.textPrimary, fontSize: 18, fontWeight: "700" },
   stepBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -208,13 +192,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  stepText: {
-    color: C.textMuted,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  // ── Lottie ──
+  stepText: { color: C.textMuted, fontSize: 12, fontWeight: "600" },
   lottieContainer: {
     alignItems: "center",
     justifyContent: "center",
@@ -235,12 +213,7 @@ const styles = StyleSheet.create({
     borderRadius: 130,
     borderWidth: 1,
   },
-  lottie: {
-    width: 200,
-    height: 200,
-  },
-
-  // ── Text ──
+  lottie: { width: 200, height: 200 },
   textSection: {
     flex: 1,
     justifyContent: "center",
@@ -263,26 +236,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  highlightIcon: {
-    fontSize: 22,
-  },
-  highlightText: {
-    flex: 1,
-  },
-  highlightTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    marginBottom: 3,
-  },
-  highlightSub: {
-    fontSize: 12,
-    color: C.textMuted,
-  },
-
-  // ── Bottom ──
-  bottomSection: {
-    gap: 16,
-  },
+  highlightIcon: { fontSize: 22 },
+  highlightText: { flex: 1 },
+  highlightTitle: { fontSize: 14, fontWeight: "700", marginBottom: 3 },
+  highlightSub: { fontSize: 12, color: C.textMuted },
+  bottomSection: { gap: 16 },
   ctaBtn: {
     paddingVertical: 17,
     borderRadius: 18,
@@ -298,15 +256,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.3,
   },
-  loginLink: {
-    alignItems: "center",
-    paddingVertical: 4,
-  },
-  loginLinkText: {
-    color: C.textMuted,
-    fontSize: 14,
-  },
-  loginLinkBold: {
-    fontWeight: "700",
-  },
+  loginLink: { alignItems: "center", paddingVertical: 4 },
+  loginLinkText: { color: C.textMuted, fontSize: 14 },
+  loginLinkBold: { fontWeight: "700" },
 });

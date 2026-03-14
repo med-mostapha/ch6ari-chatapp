@@ -1,3 +1,11 @@
+import {
+  C,
+  DotIndicator,
+  FadeInLottie,
+  GlowOrb,
+  OnboardingButton,
+  SlideText,
+} from "@/components/onboarding/shared";
 import { useRouter } from "expo-router";
 import LottieView from "lottie-react-native";
 import React, { useRef } from "react";
@@ -10,16 +18,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import {
-  C,
-  DotIndicator,
-  FadeInLottie,
-  GlowOrb,
-  OnboardingButton,
-  SlideText,
-} from "./_shared";
-
-const ACCENT = C.accent2; // Green for this screen
+const ACCENT = C.accent2; // Green
 
 export default function OnboardingScreen2() {
   const router = useRouter();
@@ -27,12 +26,11 @@ export default function OnboardingScreen2() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* ── Ambient background orbs ── */}
       <GlowOrb color={ACCENT} size={300} top={-60} right={-80} delay={200} />
       <GlowOrb color={ACCENT} size={180} bottom={120} left={-50} delay={1000} />
 
       <View style={styles.container}>
-        {/* ── Skip button ── */}
+        {/* ── Top row ── */}
         <View style={styles.topRow}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -50,7 +48,7 @@ export default function OnboardingScreen2() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Lottie illustration ── */}
+        {/* ── Lottie ── */}
         <FadeInLottie>
           <View style={styles.lottieContainer}>
             <View style={[styles.lottieRing, { borderColor: ACCENT + "30" }]} />
@@ -68,9 +66,7 @@ export default function OnboardingScreen2() {
         <View style={styles.textSection}>
           <SlideText
             title={"Groups &\nTeamwork"}
-            subtitle={
-              "Create group chats for your team, family, or friends. Invite members, manage roles, and keep everyone in sync."
-            }
+            subtitle="Create group chats for your team, family, or friends. Invite members and keep everyone in sync."
             delay={200}
           />
 
@@ -89,17 +85,14 @@ export default function OnboardingScreen2() {
           </View>
         </View>
 
-        {/* ── Bottom section ── */}
+        {/* ── Bottom ── */}
         <View style={styles.bottomSection}>
           <DotIndicator total={3} current={1} accentColor={ACCENT} />
-
-          <View style={styles.btnWrapper}>
-            <OnboardingButton
-              label="Next  →"
-              onPress={() => router.push("/(onboarding)/screen3")}
-              color={ACCENT}
-            />
-          </View>
+          <OnboardingButton
+            label="Next  →"
+            onPress={() => router.push("/(onboarding)/screen3")}
+            color={ACCENT}
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -107,15 +100,8 @@ export default function OnboardingScreen2() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: C.bg,
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 28,
-    paddingBottom: 20,
-  },
+  safeArea: { flex: 1, backgroundColor: C.bg },
+  container: { flex: 1, paddingHorizontal: 28, paddingBottom: 20 },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -133,11 +119,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  backText: {
-    color: C.textPrimary,
-    fontSize: 18,
-    fontWeight: "700",
-  },
+  backText: { color: C.textPrimary, fontSize: 18, fontWeight: "700" },
   skipBtn: {
     paddingHorizontal: 14,
     paddingVertical: 7,
@@ -146,13 +128,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  skipText: {
-    color: C.textMuted,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  // ── Lottie ──
+  skipText: { color: C.textMuted, fontSize: 13, fontWeight: "600" },
   lottieContainer: {
     alignItems: "center",
     justifyContent: "center",
@@ -166,23 +142,14 @@ const styles = StyleSheet.create({
     borderRadius: 115,
     borderWidth: 1.5,
   },
-  lottie: {
-    width: 200,
-    height: 200,
-  },
-
-  // ── Text ──
+  lottie: { width: 200, height: 200 },
   textSection: {
     flex: 1,
     justifyContent: "center",
     paddingHorizontal: 8,
     gap: 20,
   },
-
-  // Feature bullets
-  featureList: {
-    gap: 10,
-  },
+  featureList: { gap: 10 },
   featureRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -194,18 +161,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     gap: 12,
   },
-  featureIcon: {
-    fontSize: 18,
-  },
-  featureText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: C.textSecondary,
-  },
-
-  // ── Bottom ──
-  bottomSection: {
-    gap: 24,
-  },
-  btnWrapper: {},
+  featureIcon: { fontSize: 18 },
+  featureText: { fontSize: 14, fontWeight: "500", color: C.textSecondary },
+  bottomSection: { gap: 24 },
 });
