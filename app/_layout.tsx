@@ -1,14 +1,13 @@
 import { AuthProvider, useAuth } from "@/context/AuthContext";
-import { updatePushToken } from "@/services/profileService"; // استخدام الخدمة الجديدة
+import { updatePushToken } from "@/services/profileService";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Linking from "expo-linking";
 import * as Notifications from "expo-notifications";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect, useRef } from "react";
-import { ActivityIndicator, Platform, View } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, View } from "react-native";
 
-// Set notification behavior
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -27,7 +26,7 @@ async function registerForPushNotificationsAsync() {
       name: "default",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#2563EB",
+      lightColor: "#6C63FF", // Updated to match accent
     });
   }
 
@@ -39,10 +38,7 @@ async function registerForPushNotificationsAsync() {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    if (finalStatus !== "granted") {
-      console.log("Failed to get push token for push notification!");
-      return;
-    }
+    if (finalStatus !== "granted") return;
 
     const projectId =
       Constants?.expoConfig?.extra?.eas?.projectId ??
@@ -50,12 +46,9 @@ async function registerForPushNotificationsAsync() {
 
     try {
       token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-      console.log("Push Token:", token);
     } catch (e) {
       console.log("Error fetching push token:", e);
     }
-  } else {
-    console.log("Must use physical device for Push Notifications");
   }
 
   return token;
@@ -69,13 +62,10 @@ function RootLayoutNav() {
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
 
-  // Notification logic
   useEffect(() => {
     if (session?.user?.id) {
       registerForPushNotificationsAsync().then(async (token) => {
-        if (token) {
-          await updatePushToken(session.user.id, token);
-        }
+        if (token) await updatePushToken(session.user.id, token);
       });
 
       notificationListener.current =
@@ -86,23 +76,16 @@ function RootLayoutNav() {
       responseListener.current =
         Notifications.addNotificationResponseReceivedListener((response) => {
           const roomId = response.notification.request.content.data?.roomId;
-          if (roomId) {
-            router.push(`/chat/${roomId}`);
-          }
+          if (roomId) router.push(`/chat/${roomId}`);
         });
 
       return () => {
-        if (notificationListener.current) {
-          notificationListener.current.remove();
-        }
-        if (responseListener.current) {
-          responseListener.current.remove();
-        }
+        notificationListener.current?.remove();
+        responseListener.current?.remove();
       };
     }
   }, [session?.user?.id]);
 
-  // Deep linking logic
   useEffect(() => {
     const handleDeepLink = (event: { url: string }) => {
       const data = Linking.parse(event.url);
@@ -112,7 +95,6 @@ function RootLayoutNav() {
     };
 
     const subscription = Linking.addEventListener("url", handleDeepLink);
-
     const checkInitialUrl = async () => {
       const url = await Linking.getInitialURL();
       if (url) handleDeepLink({ url });
@@ -122,10 +104,8 @@ function RootLayoutNav() {
     return () => subscription.remove();
   }, []);
 
-  // Auth guard logic
   useEffect(() => {
     if (loading) return;
-
     const inAuthGroup = segments[0] === "(auth)";
     const isResetting = segments[1] === "reset-password";
 
@@ -136,10 +116,11 @@ function RootLayoutNav() {
     }
   }, [session, loading, segments]);
 
+  // ── Premium loading screen ──
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#2563EB" />
+      <View style={loadingStyles.container}>
+        <ActivityIndicator size="large" color="#6C63FF" />
       </View>
     );
   }
@@ -155,9 +136,19 @@ function RootLayoutNav() {
         options={{ headerShown: false, presentation: "modal" }}
       />
       <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
+      <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
     </Stack>
   );
 }
+
+const loadingStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#0A0A0F",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});
 
 export default function RootLayout() {
   return (
