@@ -10,21 +10,15 @@ import { ActivityIndicator, Platform, StyleSheet, View } from "react-native";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
     shouldShowBanner: true,
     shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
   }),
 });
 
-// app/_layout.tsx - عدّل الـ function هذي مؤقتاً
 async function registerForPushNotificationsAsync() {
   let token;
-
-  console.log("🔔 [1] Starting push registration...");
-  console.log("🔔 [2] Is physical device:", Device.isDevice);
-  console.log("🔔 [3] Platform:", Platform.OS);
 
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("default", {
@@ -38,17 +32,14 @@ async function registerForPushNotificationsAsync() {
   if (Device.isDevice) {
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
-    console.log("🔔 [4] Existing permission:", existingStatus);
 
     let finalStatus = existingStatus;
     if (existingStatus !== "granted") {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    console.log("🔔 [5] Final permission:", finalStatus);
 
     if (finalStatus !== "granted") {
-      console.log("❌ Permission not granted!");
       return;
     }
 
@@ -56,16 +47,10 @@ async function registerForPushNotificationsAsync() {
       Constants?.expoConfig?.extra?.eas?.projectId ??
       Constants?.easConfig?.projectId;
 
-    console.log("🔔 [6] ProjectId:", projectId);
-
     try {
       token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-      console.log("✅ [7] Token:", token);
-    } catch (e: any) {
-      console.log("❌ [7] Error fetching token:", e.message);
-    }
+    } catch (e: any) {}
   } else {
-    console.log("❌ Not a physical device!");
   }
 
   return token;
