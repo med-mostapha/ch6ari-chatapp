@@ -1,6 +1,13 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, AppState, FlatList, StyleSheet } from "react-native";
+import {
+  Alert,
+  AppState,
+  FlatList,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Components
@@ -18,13 +25,70 @@ import {
 } from "@/services/chat";
 import { supabase } from "@/services/supabaseClient";
 
+const COLORS = {
+  bg: "#0A0A0F",
+  surface: "#13131A",
+  border: "#2A2A3D",
+  accent: "#6C63FF",
+  textMuted: "#5A5A72",
+};
+
+// ── Helper: format a date as a readable separator label ──────────────────────
+function getDateLabel(dateStr: string): string {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString([], {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+// ── Date separator component ─────────────────────────────────────────────────
+function DateSeparator({ label }: { label: string }) {
+  return (
+    <View style={sepStyles.container}>
+      <View style={sepStyles.line} />
+      <Text style={sepStyles.label}>{label}</Text>
+      <View style={sepStyles.line} />
+    </View>
+  );
+}
+
+const sepStyles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 14,
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: COLORS.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+});
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ChatDetailScreen() {
   const { id } = useLocalSearchParams();
   const { session } = useAuth();
   const router = useRouter();
   const flatListRef = useRef<FlatList>(null);
 
-  // State
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -45,11 +109,8 @@ export default function ChatDetailScreen() {
 
     initializeChat();
 
-    // Realtime Subscriptions
     const channel = supabase
-      .channel(`room-events-${id}`, {
-        config: { broadcast: { self: true } },
-      })
+      .channel(`room-events-${id}`, { config: { broadcast: { self: true } } })
       .on("broadcast", { event: "user-kicked" }, (payload) => {
         if (payload.payload.userId === session.user.id) {
           Alert.alert("Notice", "You have been removed from this chat.");
@@ -71,14 +132,16 @@ export default function ChatDetailScreen() {
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
         async (payload) => {
           if (payload.new.room_id !== id) return;
-
           if (payload.new.user_id !== session.user.id) {
             await markMessagesAsRead(id as string, session.user.id);
           }
-
           const { data: profile } = await supabase
             .from("profiles")
             .select("username")
@@ -97,7 +160,6 @@ export default function ChatDetailScreen() {
               msgWithProfile,
             ];
           });
-
           setTimeout(
             () => flatListRef.current?.scrollToEnd({ animated: true }),
             100,
@@ -106,7 +168,11 @@ export default function ChatDetailScreen() {
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "messages" },
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "messages",
+        },
         (payload) => {
           setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
         },
@@ -124,40 +190,28 @@ export default function ChatDetailScreen() {
   }, [id, session?.user?.id]);
 
   const fetchRoomDetails = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("rooms")
       .select(
-        `
-        name, 
-        is_group, 
-        created_by,
-        room_members (
-          user_id,
-          profiles:user_id (username)
-        )
-      `,
+        `name, is_group, created_by, room_members (user_id, profiles:user_id (username))`,
       )
       .eq("id", id)
       .single();
 
     if (data) {
-      const roomData = data as any; // استخدام any هنا يحل مشكلة الـ 'never' فوراً
+      const roomData = data as any;
       setRoomOwner(roomData.created_by);
 
       if (!roomData.is_group) {
-        // البحث عن العضو الآخر
         const otherMember = roomData.room_members?.find(
           (m: any) => m.user_id !== session?.user?.id,
         );
-
-        // استخراج الاسم مع مراعاة احتمال كونه مصفوفة أو كائن
         let otherUsername = "Chat";
         if (otherMember?.profiles) {
           otherUsername = Array.isArray(otherMember.profiles)
             ? otherMember.profiles[0]?.username
             : otherMember.profiles?.username;
         }
-
         setRoomTitle(otherUsername || "Chat");
       } else {
         setRoomTitle(roomData.name);
@@ -167,7 +221,7 @@ export default function ChatDetailScreen() {
 
   const fetchMessages = async () => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("messages")
         .select("*, profiles(username)")
         .eq("room_id", id)
@@ -178,7 +232,7 @@ export default function ChatDetailScreen() {
         () => flatListRef.current?.scrollToEnd({ animated: false }),
         200,
       );
-    } catch (error) {
+    } catch {
       console.log("Error loading messages");
     }
   };
@@ -202,7 +256,6 @@ export default function ChatDetailScreen() {
         profiles: { username: "You" },
       },
     ]);
-
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
 
     const { error } = await sendMessage(id as string, session.user.id, content);
@@ -232,21 +285,41 @@ export default function ChatDetailScreen() {
   };
 
   const confirmDelete = () => {
-    Alert.alert("Delete", `Delete ${selectedIds.length} messages?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          const { error } = await deleteMessages(selectedIds);
-          if (!error) {
-            setSelectionMode(false);
-            setSelectedIds([]);
-          }
+    Alert.alert(
+      "Delete Messages",
+      `Delete ${selectedIds.length} message${selectedIds.length > 1 ? "s" : ""}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const { error } = await deleteMessages(selectedIds);
+            if (!error) {
+              setSelectionMode(false);
+              setSelectedIds([]);
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
+
+  // ── Build a list with date separators injected between days ─────────────
+  const messagesWithSeparators = React.useMemo(() => {
+    const result: any[] = [];
+    let lastDateLabel = "";
+
+    for (const msg of messages) {
+      const label = getDateLabel(msg.created_at);
+      if (label !== lastDateLabel) {
+        result.push({ id: `sep-${msg.created_at}`, type: "separator", label });
+        lastDateLabel = label;
+      }
+      result.push(msg);
+    }
+    return result;
+  }, [messages]);
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -264,30 +337,39 @@ export default function ChatDetailScreen() {
 
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={messagesWithSeparators}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <MessageBubble
-            item={item}
-            isMine={item.user_id === session?.user?.id}
-            isSelected={selectedIds.includes(item.id)}
-            selectionMode={selectionMode}
-            isOwner={item.user_id === roomOwner}
-            onLongPress={() =>
-              handleLongPress(item.id, item.user_id === session?.user?.id)
-            }
-            onPress={() =>
-              handlePress(item.id, item.user_id === session?.user?.id)
-            }
-            formatTime={(d) =>
-              new Date(d).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            }
-          />
-        )}
+        showsVerticalScrollIndicator={false}
+        // Accent colored refresh indicator
+        progressViewOffset={10}
+        renderItem={({ item }) => {
+          // Date separator
+          if (item.type === "separator") {
+            return <DateSeparator label={item.label} />;
+          }
+          return (
+            <MessageBubble
+              item={item}
+              isMine={item.user_id === session?.user?.id}
+              isSelected={selectedIds.includes(item.id)}
+              selectionMode={selectionMode}
+              isOwner={item.user_id === roomOwner}
+              onLongPress={() =>
+                handleLongPress(item.id, item.user_id === session?.user?.id)
+              }
+              onPress={() =>
+                handlePress(item.id, item.user_id === session?.user?.id)
+              }
+              formatTime={(d) =>
+                new Date(d).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              }
+            />
+          );
+        }}
       />
 
       {!selectionMode && (
@@ -312,6 +394,12 @@ export default function ChatDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  listContent: { paddingVertical: 10, paddingHorizontal: 5 },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg, // Dark chat background
+  },
+  listContent: {
+    paddingVertical: 12,
+    paddingHorizontal: 2, // Minimal horizontal — bubbles handle their own padding
+  },
 });

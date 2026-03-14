@@ -1,3 +1,17 @@
+/**
+ * app/new-chat.tsx
+ * Premium Dark Theme — New chat / add member modal screen
+ *
+ * Key upgrades:
+ * - Full dark modal consistent with the design system
+ * - Floating group creation card with icon instead of plain row
+ * - User list items have dynamic avatar colors
+ * - Search bar has focus state with accent border
+ * - Group creation modal is dark with proper input styling
+ * - Loading overlay is subtle (not a blocking spinner)
+ * - Empty / hint state when query is too short
+ */
+
 import { useAuth } from "@/context/AuthContext";
 import {
   createRoom,
@@ -14,6 +28,7 @@ import {
   Alert,
   FlatList,
   Modal,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -21,6 +36,37 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const COLORS = {
+  bg: "#0A0A0F",
+  surface: "#13131A",
+  inputBg: "#1C1C27",
+  border: "#2A2A3D",
+  accent: "#6C63FF",
+  accentDim: "rgba(108, 99, 255, 0.15)",
+  textPrimary: "#F1F1F5",
+  textSecondary: "#8B8B9E",
+  textMuted: "#5A5A72",
+  white: "#FFFFFF",
+  success: "#34D399",
+  successDim: "rgba(52, 211, 153, 0.12)",
+};
+
+const AVATAR_COLORS = [
+  "#6C63FF",
+  "#EF4444",
+  "#F59E0B",
+  "#10B981",
+  "#3B82F6",
+  "#EC4899",
+  "#8B5CF6",
+  "#06B6D4",
+];
+
+function getAvatarColor(name: string): string {
+  if (!name) return AVATAR_COLORS[0];
+  return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
+}
 
 export default function NewChatScreen() {
   const { roomId } = useLocalSearchParams();
@@ -30,9 +76,11 @@ export default function NewChatScreen() {
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [currentUsername, setCurrentUsername] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
 
   useEffect(() => {
     const getProfile = async () => {
@@ -60,8 +108,7 @@ export default function NewChatScreen() {
 
   const handleAction = async (targetUser: any) => {
     if (!session?.user?.id) return;
-
-    setLoading(true);
+    setActionLoading(targetUser.id);
 
     if (roomId) {
       const { error } = await inviteUserToRoom(
@@ -71,20 +118,16 @@ export default function NewChatScreen() {
         currentUsername,
         targetUser.username,
       );
-      setLoading(false);
-
-      if (error) {
-        Alert.alert("Notice", "Failed to add member");
-      } else {
-        router.back();
-      }
+      setActionLoading(null);
+      if (error) Alert.alert("Notice", "Failed to add member");
+      else router.back();
     } else {
-      const { data, error } = await startNewChat(
+      const { data } = await startNewChat(
         session.user.id,
         targetUser.id,
         targetUser.username,
       );
-      setLoading(false);
+      setActionLoading(null);
       if (data) router.replace(`/chat/${data.id}`);
     }
   };
@@ -103,7 +146,6 @@ export default function NewChatScreen() {
           type: "system",
         },
       ]);
-
       setLoading(false);
       setModalVisible(false);
       router.replace(`/chat/${data.id}`);
@@ -113,180 +155,489 @@ export default function NewChatScreen() {
     }
   };
 
+  const isAddMode = !!roomId;
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      {/* ── Group Creation Modal ── */}
       <Modal visible={modalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setModalVisible(false)}
+          />
+          <View style={styles.modalCard}>
+            {/* Modal handle */}
+            <View style={styles.modalHandle} />
+
             <Text style={styles.modalTitle}>New Group</Text>
-            <TextInput
-              placeholder="Enter group name..."
-              style={styles.modalInput}
-              value={groupName}
-              onChangeText={setGroupName}
-              autoFocus
-            />
+            <Text style={styles.modalSubtitle}>
+              Give your group a name to get started
+            </Text>
+
+            <View style={styles.modalInputWrapper}>
+              <Ionicons
+                name="people-outline"
+                size={16}
+                color={COLORS.textMuted}
+                style={styles.modalInputIcon}
+              />
+              <TextInput
+                placeholder="Group name..."
+                placeholderTextColor={COLORS.textMuted}
+                style={styles.modalInput}
+                value={groupName}
+                onChangeText={setGroupName}
+                autoFocus
+                maxLength={40}
+              />
+            </View>
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                onPress={() => setModalVisible(false)}
+                onPress={() => {
+                  setModalVisible(false);
+                  setGroupName("");
+                }}
                 style={styles.cancelBtn}
+                activeOpacity={0.7}
               >
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleCreateGroup}
-                style={styles.createBtn}
+                style={[
+                  styles.createBtn,
+                  !groupName.trim() && styles.createBtnDisabled,
+                ]}
+                disabled={!groupName.trim() || loading}
+                activeOpacity={0.8}
               >
-                <Text style={styles.createText}>Create</Text>
+                {loading ? (
+                  <ActivityIndicator color={COLORS.white} size="small" />
+                ) : (
+                  <Text style={styles.createText}>Create</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
+      {/* ── Header ── */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="close" size={28} color="#111827" />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.closeBtn}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="close" size={18} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>
-          {roomId ? "Add Member" : "New Message"}
+          {isAddMode ? "Add Member" : "New Message"}
         </Text>
-        <View style={{ width: 28 }} />
+        {/* Spacer */}
+        <View style={styles.closeBtn} />
       </View>
 
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color="#9CA3AF" />
-        <TextInput
-          placeholder="Search by name..."
-          style={styles.input}
-          value={query}
-          onChangeText={handleSearch}
-        />
+      {/* ── Search Bar ── */}
+      <View style={styles.searchWrapper}>
+        <View
+          style={[styles.searchBar, searchFocused && styles.searchBarFocused]}
+        >
+          <Ionicons
+            name="search-outline"
+            size={17}
+            color={searchFocused ? COLORS.accent : COLORS.textMuted}
+          />
+          <TextInput
+            placeholder="Search by username..."
+            placeholderTextColor={COLORS.textMuted}
+            style={styles.searchInput}
+            value={query}
+            onChangeText={handleSearch}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            autoFocus={!isAddMode}
+          />
+          {query.length > 0 && (
+            <Pressable
+              onPress={() => {
+                setQuery("");
+                setUsers([]);
+              }}
+              hitSlop={8}
+            >
+              <Ionicons
+                name="close-circle"
+                size={17}
+                color={COLORS.textMuted}
+              />
+            </Pressable>
+          )}
+        </View>
       </View>
 
+      {/* ── List ── */}
       <FlatList
         data={users}
         keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          !roomId ? (
+          !isAddMode ? (
             <TouchableOpacity
-              style={styles.groupOption}
+              style={styles.groupCard}
               onPress={() => setModalVisible(true)}
+              activeOpacity={0.8}
             >
-              <View style={styles.groupIcon}>
-                <Ionicons name="people" size={24} color="#fff" />
+              <View style={styles.groupIconBox}>
+                <Ionicons name="people" size={22} color={COLORS.white} />
               </View>
-              <Text style={styles.groupText}>Create New Group</Text>
+              <View style={styles.groupTextBlock}>
+                <Text style={styles.groupTitle}>Create New Group</Text>
+                <Text style={styles.groupSubtitle}>
+                  Start a group conversation
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={COLORS.textMuted}
+              />
             </TouchableOpacity>
           ) : null
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.userItem}
-            onPress={() => handleAction(item)}
-          >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{item.username?.[0]}</Text>
+        ListEmptyComponent={
+          query.length === 0 ? (
+            <View style={styles.hintContainer}>
+              <Ionicons
+                name="search-outline"
+                size={40}
+                color={COLORS.textMuted}
+              />
+              <Text style={styles.hintText}>
+                {isAddMode
+                  ? "Search for a user to add to this group"
+                  : "Search for someone to start a conversation"}
+              </Text>
             </View>
-            <Text style={styles.userName}>{item.username}</Text>
-            <Ionicons name="add-circle-outline" size={24} color="#2563EB" />
-          </TouchableOpacity>
-        )}
+          ) : query.length < 2 ? (
+            <View style={styles.hintContainer}>
+              <Text style={styles.hintText}>Keep typing...</Text>
+            </View>
+          ) : !loading ? (
+            <View style={styles.hintContainer}>
+              <Text style={styles.hintText}>No users found for "{query}"</Text>
+            </View>
+          ) : null
+        }
+        renderItem={({ item }) => {
+          const avatarColor = getAvatarColor(item.username);
+          const isActing = actionLoading === item.id;
+
+          return (
+            <TouchableOpacity
+              style={styles.userRow}
+              onPress={() => handleAction(item)}
+              activeOpacity={0.75}
+              disabled={!!actionLoading}
+            >
+              {/* Avatar */}
+              <View
+                style={[styles.userAvatar, { backgroundColor: avatarColor }]}
+              >
+                <Text style={styles.userAvatarText}>
+                  {item.username?.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+
+              {/* Name */}
+              <Text style={styles.userName}>{item.username}</Text>
+
+              {/* Action indicator */}
+              {isActing ? (
+                <ActivityIndicator size="small" color={COLORS.accent} />
+              ) : (
+                <View style={styles.addIconBox}>
+                  <Ionicons
+                    name={
+                      isAddMode ? "person-add-outline" : "chatbubble-outline"
+                    }
+                    size={16}
+                    color={COLORS.accent}
+                  />
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        }}
       />
 
-      {loading && (
-        <ActivityIndicator size="large" style={styles.loader} color="#2563EB" />
+      {/* Full-screen loading (initial search only) */}
+      {loading && users.length === 0 && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={COLORS.accent} />
+        </View>
       )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+
+  // ── Header ──
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
   },
-  title: { fontSize: 18, fontWeight: "700" },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.inputBg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    letterSpacing: -0.2,
+  },
+
+  // ── Search ──
+  searchWrapper: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    margin: 20,
-    padding: 12,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    paddingHorizontal: 14,
+    height: 48,
+    gap: 10,
   },
-  input: { flex: 1, marginLeft: 10, fontSize: 16 },
-  groupOption: {
+  searchBarFocused: {
+    borderColor: COLORS.accent,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    paddingVertical: 0,
+  },
+
+  // ── List ──
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+  },
+
+  // ── Group card ──
+  groupCard: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+    marginBottom: 16,
+    gap: 14,
   },
-  groupIcon: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    backgroundColor: "#10B981",
+  groupIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: COLORS.success,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 15,
   },
-  groupText: { fontSize: 16, fontWeight: "600", color: "#10B981" },
-  userItem: {
+  groupTextBlock: {
+    flex: 1,
+  },
+  groupTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  groupSubtitle: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+
+  // ── User rows ──
+  userRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 15,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    borderBottomColor: COLORS.border,
+    gap: 14,
   },
-  avatar: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    backgroundColor: "#2563EB",
+  userAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 15,
   },
-  avatarText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  userName: { flex: 1, fontSize: 16, fontWeight: "500" },
-  loader: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: [{ translateX: -25 }, { translateY: -25 }],
+  userAvatarText: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: "700",
   },
+  userName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+  },
+  addIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: COLORS.accentDim,
+    borderWidth: 1,
+    borderColor: COLORS.accent + "40",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // ── Hint / Empty ──
+  hintContainer: {
+    alignItems: "center",
+    paddingTop: 48,
+    gap: 12,
+  },
+  hintText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    textAlign: "center",
+    lineHeight: 20,
+    maxWidth: 220,
+  },
+
+  // ── Loading overlay ──
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(10,10,15,0.6)",
+  },
+
+  // ── Group creation modal ──
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "flex-end",
   },
-  modalContent: {
-    backgroundColor: "#fff",
-    width: "80%",
-    padding: 20,
-    borderRadius: 15,
+  modalCard: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 36,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: COLORS.border,
   },
-  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 15 },
-  modalInput: {
-    backgroundColor: "#F3F4F6",
-    padding: 12,
-    borderRadius: 8,
+  modalHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.border,
+    alignSelf: "center",
     marginBottom: 20,
   },
-  modalButtons: { flexDirection: "row", justifyContent: "flex-end" },
-  cancelBtn: { marginRight: 20, padding: 10 },
-  cancelText: { color: "#6B7280", fontWeight: "600" },
-  createBtn: {
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+    letterSpacing: -0.3,
+    marginBottom: 4,
   },
-  createText: { color: "#fff", fontWeight: "bold" },
+  modalSubtitle: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginBottom: 20,
+  },
+  modalInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    paddingHorizontal: 14,
+    height: 52,
+    marginBottom: 24,
+    gap: 10,
+  },
+  modalInputIcon: {},
+  modalInput: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    paddingVertical: 0,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  cancelBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.inputBg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  cancelText: {
+    color: COLORS.textSecondary,
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  createBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.accent,
+    shadowColor: COLORS.accent,
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  createBtnDisabled: {
+    backgroundColor: "#3D3A6B",
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  createText: {
+    color: COLORS.white,
+    fontWeight: "700",
+    fontSize: 14,
+  },
 });
