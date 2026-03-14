@@ -71,13 +71,12 @@ function RootLayoutNav() {
       });
 
       notificationListener.current =
-        Notifications.addNotificationReceivedListener((notification) => {
-          console.log("Notification Received:", notification);
-        });
+        Notifications.addNotificationReceivedListener((notification) => {});
 
       responseListener.current =
         Notifications.addNotificationResponseReceivedListener((response) => {
-          const roomId = response.notification.request.content.data?.roomId;
+          const data = response.notification.request.content.data;
+          const roomId = data?.roomId;
           if (roomId) router.push(`/chat/${roomId}`);
         });
 
