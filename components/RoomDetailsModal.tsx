@@ -126,7 +126,7 @@ export const RoomDetailsModal = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="fade" transparent>
       <View style={styles.overlay}>
         {/* Tap outside to close */}
         <TouchableOpacity
@@ -246,6 +246,7 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: "flex-end",
+    bottom: 40,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

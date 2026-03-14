@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   miniAvatar: {
     width: 36,
     height: 36,
-    borderRadius: 12,
+    borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
   },
