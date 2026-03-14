@@ -17,6 +17,36 @@ import {
   View,
 } from "react-native";
 
+const COLORS = {
+  bg: "#0A0A0F",
+  surface: "#13131A",
+  surfaceElevated: "#1C1C27",
+  border: "#2A2A3D",
+  accent: "#6C63FF",
+  textPrimary: "#F1F1F5",
+  textSecondary: "#8B8B9E",
+  textMuted: "#5A5A72",
+  white: "#FFFFFF",
+  error: "#F87171",
+  errorDim: "rgba(248, 113, 113, 0.1)",
+  gold: "#FBBF24",
+};
+
+const AVATAR_COLORS = [
+  "#6C63FF",
+  "#EF4444",
+  "#F59E0B",
+  "#10B981",
+  "#3B82F6",
+  "#EC4899",
+  "#8B5CF6",
+  "#06B6D4",
+];
+
+function getAvatarColor(name: string): string {
+  return AVATAR_COLORS[(name?.charCodeAt(0) ?? 0) % AVATAR_COLORS.length];
+}
+
 interface RoomDetailsModalProps {
   visible: boolean;
   onClose: () => void;
@@ -50,26 +80,44 @@ export const RoomDetailsModal = ({
   };
 
   const handleKick = (targetId: string, targetName: string) => {
+    Alert.alert("Remove Member", `Remove ${targetName} from the group?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: async () => {
+          const ownerName = await getUsernameById(currentUserId);
+          const { error } = await kickUser(
+            roomId,
+            targetId,
+            targetName,
+            ownerName,
+          );
+          if (!error) fetchMembers();
+          else Alert.alert("Error", "Failed to remove member.");
+        },
+      },
+    ]);
+  };
+
+  const handleLeaveOrDelete = () => {
     Alert.alert(
-      "Kick Member",
-      `Are you sure you want to remove ${targetName} from the group?`,
+      isOwner ? "Delete Group" : "Leave Chat",
+      isOwner
+        ? "This will permanently delete the group and all messages for everyone."
+        : "Are you sure you want to leave this conversation?",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Remove",
+          text: isOwner ? "Delete Forever" : "Leave",
           style: "destructive",
           onPress: async () => {
-            const ownerName = await getUsernameById(currentUserId);
-            const { error } = await kickUser(
-              roomId,
-              targetId,
-              targetName,
-              ownerName,
-            );
+            const { error } = await leaveRoom(roomId, currentUserId, isOwner);
             if (!error) {
-              fetchMembers();
+              onClose();
+              onRoomDeleted();
             } else {
-              Alert.alert("Error", "Failed to remove member.");
+              Alert.alert("Error", "Action failed. Try again.");
             }
           },
         },
@@ -77,94 +125,117 @@ export const RoomDetailsModal = ({
     );
   };
 
-  const handleLeaveOrDelete = () => {
-    const title = isOwner ? "Delete Group" : "Leave Chat";
-    const message = isOwner
-      ? "As the owner, deleting this group will remove everyone and all messages. Are you sure?"
-      : "Are you sure you want to leave this conversation?";
-
-    Alert.alert(title, message, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: isOwner ? "Delete" : "Leave",
-        style: "destructive",
-        onPress: async () => {
-          const { error } = await leaveRoom(roomId, currentUserId, isOwner);
-          if (!error) {
-            onClose();
-            onRoomDeleted();
-          } else {
-            Alert.alert("Error", "Action failed. Try again.");
-          }
-        },
-      },
-    ]);
-  };
-
   return (
-    <Modal visible={visible} animationType="fade" transparent>
+    <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
-        <View style={styles.container}>
+        {/* Tap outside to close */}
+        <TouchableOpacity
+          style={styles.backdrop}
+          onPress={onClose}
+          activeOpacity={1}
+        />
+
+        <View style={styles.sheet}>
+          {/* ── Drag Handle ── */}
+          <View style={styles.dragHandle} />
+
+          {/* ── Header ── */}
           <View style={styles.header}>
-            <Text style={styles.title}>Group Members</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color="#111827" />
+            <View>
+              <Text style={styles.title}>Group Members</Text>
+              {!loading && (
+                <Text style={styles.memberCount}>
+                  {members.length} {members.length === 1 ? "member" : "members"}
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
 
+          {/* ── Members List ── */}
           {loading ? (
-            <ActivityIndicator style={{ margin: 20 }} color="#2563EB" />
+            <ActivityIndicator
+              style={styles.loader}
+              color={COLORS.accent}
+              size="large"
+            />
           ) : (
             <FlatList
               data={members}
               keyExtractor={(item) => item.user_id}
-              renderItem={({ item }) => (
-                <View style={styles.memberItem}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                      {item.profiles?.username?.[0].toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={styles.username}>{item.profiles?.username}</Text>
+              style={styles.list}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => {
+                const name = item.profiles?.username ?? "User";
+                const avatarColor = getAvatarColor(name);
+                const isItemOwner = item.user_id === roomOwnerId;
 
-                  {item.user_id === roomOwnerId ? (
-                    <View style={styles.ownerBadge}>
-                      <Text style={styles.ownerText}>Owner</Text>
+                return (
+                  <View style={styles.memberRow}>
+                    {/* Avatar */}
+                    <View
+                      style={[styles.avatar, { backgroundColor: avatarColor }]}
+                    >
+                      <Text style={styles.avatarText}>
+                        {name.charAt(0).toUpperCase()}
+                      </Text>
                     </View>
-                  ) : (
-                    isOwner && (
+
+                    {/* Name + badges */}
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberName}>{name}</Text>
+                      {isItemOwner && (
+                        <View style={styles.ownerBadge}>
+                          <Ionicons name="star" size={9} color={COLORS.gold} />
+                          <Text style={styles.ownerBadgeText}>Owner</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Kick button — only visible to owner, only for non-owners */}
+                    {isOwner && !isItemOwner && (
                       <TouchableOpacity
-                        onPress={() =>
-                          handleKick(item.user_id, item.profiles?.username)
-                        }
+                        onPress={() => handleKick(item.user_id, name)}
                         style={styles.kickBtn}
+                        activeOpacity={0.7}
                       >
                         <Ionicons
                           name="person-remove-outline"
-                          size={20}
-                          color="#EF4444"
+                          size={16}
+                          color={COLORS.error}
                         />
                       </TouchableOpacity>
-                    )
-                  )}
-                </View>
-              )}
+                    )}
+                  </View>
+                );
+              }}
             />
           )}
 
-          <TouchableOpacity
-            style={styles.leaveBtn}
-            onPress={handleLeaveOrDelete}
-          >
-            <Ionicons
-              name={isOwner ? "trash-outline" : "log-out-outline"}
-              size={20}
-              color="#EF4444"
-            />
-            <Text style={styles.leaveBtnText}>
-              {isOwner ? "Delete Group" : "Leave Chat"}
-            </Text>
-          </TouchableOpacity>
+          {/* ── Danger Action ── */}
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={styles.dangerBtn}
+              onPress={handleLeaveOrDelete}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={isOwner ? "trash-outline" : "log-out-outline"}
+                size={18}
+                color={COLORS.error}
+              />
+              <Text style={styles.dangerBtnText}>
+                {isOwner ? "Delete Group" : "Leave Chat"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -174,72 +245,162 @@ export const RoomDetailsModal = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
-  container: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    height: "75%",
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.65)",
   },
+  sheet: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: "78%",
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: COLORS.border,
+    // Depth shadow upward
+    shadowColor: "#000",
+    shadowOpacity: 0.6,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 20,
+  },
+
+  // ── Drag Handle ──
+  dragHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.border,
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: 4,
+  },
+
+  // ── Header ──
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 25,
-    paddingBottom: 15,
+    alignItems: "flex-start",
+    paddingHorizontal: 22,
+    paddingTop: 14,
+    paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    borderBottomColor: COLORS.border,
   },
-  title: { fontSize: 22, fontWeight: "800", color: "#111827" },
-  memberItem: {
+  title: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.textPrimary,
+    letterSpacing: -0.3,
+  },
+  memberCount: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginTop: 3,
+  },
+  closeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // ── List ──
+  loader: {
+    margin: 40,
+  },
+  list: {
+    flex: 1,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  memberRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 10,
+    gap: 12,
   },
   avatar: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    backgroundColor: "#EFF6FF",
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 15,
   },
-  avatarText: { fontWeight: "bold", color: "#2563EB", fontSize: 16 },
-  username: { flex: 1, fontSize: 17, fontWeight: "500", color: "#374151" },
+  avatarText: {
+    color: COLORS.white,
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  memberInfo: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  memberName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+  },
   ownerBadge: {
-    backgroundColor: "#FEF2F2",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  ownerText: { color: "#EF4444", fontSize: 13, fontWeight: "bold" },
-  kickBtn: {
-    padding: 8,
-    backgroundColor: "#FFF1F2",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "rgba(251, 191, 36, 0.1)",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(251, 191, 36, 0.2)",
   },
-  leaveBtn: {
+  ownerBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.gold,
+  },
+  kickBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "rgba(248, 113, 113, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(248, 113, 113, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // ── Footer ──
+  footer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  dangerBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 15,
-    padding: 18,
-    backgroundColor: "#FFF1F2",
-    borderRadius: 15,
+    gap: 10,
+    backgroundColor: COLORS.errorDim,
+    borderWidth: 1,
+    borderColor: "rgba(248, 113, 113, 0.2)",
+    paddingVertical: 14,
+    borderRadius: 16,
   },
-  leaveBtnText: {
-    color: "#EF4444",
-    fontSize: 17,
-    fontWeight: "800",
-    marginLeft: 10,
+  dangerBtnText: {
+    color: COLORS.error,
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
