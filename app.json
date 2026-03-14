@@ -6,7 +6,10 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "chatapp",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
@@ -57,8 +60,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "2efa3fcd-74dc-4729-91e6-19c4fa859995"
+        "projectId": "cc10ff07-cfb4-407d-8051-e7bbf5957664"
       }
-    }
+    },
+    "owner": "elmostapha"
   }
 }
