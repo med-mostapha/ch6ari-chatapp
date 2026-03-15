@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const COLORS = {
   bg: "#0A0A0F",
@@ -64,6 +65,7 @@ export const RoomDetailsModal = ({
   roomOwnerId,
   onRoomDeleted,
 }: RoomDetailsModalProps) => {
+  const insets = useSafeAreaInsets();
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const isOwner = currentUserId === roomOwnerId;
@@ -75,6 +77,7 @@ export const RoomDetailsModal = ({
   const fetchMembers = async () => {
     setLoading(true);
     const { data } = await getRoomMembers(roomId);
+
     if (data) setMembers(data);
     setLoading(false);
   };
@@ -135,7 +138,12 @@ export const RoomDetailsModal = ({
           activeOpacity={1}
         />
 
-        <View style={styles.sheet}>
+        <View
+          style={[
+            styles.sheet,
+            { paddingBottom: insets.bottom || 16 }, // ✅ safe area
+          ]}
+        >
           {/* ── Drag Handle ── */}
           <View style={styles.dragHandle} />
 
@@ -173,7 +181,10 @@ export const RoomDetailsModal = ({
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
               renderItem={({ item }) => {
-                const name = item.profiles?.username ?? "User";
+                const name =
+                  (Array.isArray(item.profiles)
+                    ? item.profiles[0]?.username
+                    : item.profiles?.username) ?? "User";
                 const avatarColor = getAvatarColor(name);
                 const isItemOwner = item.user_id === roomOwnerId;
 
@@ -246,27 +257,26 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: "flex-end",
-    bottom: 40,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.65)",
+    // بدون bottom
   },
   sheet: {
     backgroundColor: COLORS.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    maxHeight: "78%",
+    height: "60%",
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: COLORS.border,
-    // Depth shadow upward
     shadowColor: "#000",
     shadowOpacity: 0.6,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: -8 },
     elevation: 20,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.65)",
   },
 
   // ── Drag Handle ──
