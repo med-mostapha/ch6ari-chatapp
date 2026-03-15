@@ -1,5 +1,4 @@
 import { signUp } from "@/services/auth";
-import { createProfile } from "@/services/profileService";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import LottieView from "lottie-react-native";
@@ -247,9 +246,9 @@ export default function RegisterScreen() {
     setLoading(true);
 
     const { data, error } = await signUp(email, password, username);
+    setLoading(false);
 
     if (error) {
-      setLoading(false);
       setEmailStatus("invalid");
       setUsernameStatus("invalid");
       setPasswordStatus("invalid");
@@ -258,17 +257,6 @@ export default function RegisterScreen() {
       return;
     }
 
-    const user = data.user;
-    if (user) {
-      const { error: profileError } = await createProfile(user.id, username);
-      if (profileError) {
-        setLoading(false);
-        Alert.alert("Profile Error", profileError.message);
-        return;
-      }
-    }
-
-    setLoading(false);
     Alert.alert(
       "✅ Almost there!",
       "Check your email to verify your account.",
