@@ -1,25 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
+import SimpleLineIcons from "@expo/vector-icons/SimpleLineIcons";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-
 const COLORS = {
   bg: "#0A0A0F",
   myBubble: "#6C63FF",
-  myBubbleDeep: "#5A52E0",
   theirBubble: "#1C1C27",
   theirBubbleBorder: "#2A2A3D",
   accent: "#6C63FF",
   textPrimary: "#F1F1F5",
-  textSecondary: "#8B8B9E",
   textMuted: "#5A5A72",
   white: "#FFFFFF",
-  error: "#F87171",
   selectionBg: "rgba(108, 99, 255, 0.12)",
-  systemBg: "rgba(255,255,255,0.05)",
-  systemBorder: "#2A2A3D",
+  systemBg: "rgba(255,255,255,0.03)",
+  systemBorder: "#1E1E2D",
 };
 
-// Generate a consistent color for each username
 const USERNAME_COLORS = [
   "#A78BFA",
   "#34D399",
@@ -35,15 +31,25 @@ function getUsernameColor(name: string): string {
   return USERNAME_COLORS[name.charCodeAt(0) % USERNAME_COLORS.length];
 }
 
+interface Reaction {
+  id: string;
+  emoji: string;
+  user_id: string;
+}
+
 interface MessageBubbleProps {
   item: any;
   isMine: boolean;
   isSelected: boolean;
   onLongPress: () => void;
   onPress: () => void;
+  onReactionPress: (messageId: string) => void;
+  onReactionToggle: (messageId: string, emoji: string) => void;
   selectionMode: boolean;
   formatTime: (date: string) => string;
   isOwner: boolean;
+  reactions: Reaction[];
+  currentUserId: string;
 }
 
 export const MessageBubble = ({
@@ -52,32 +58,47 @@ export const MessageBubble = ({
   isSelected,
   onLongPress,
   onPress,
+  onReactionPress,
+  onReactionToggle,
   selectionMode,
   formatTime,
   isOwner,
+  reactions = [],
+  currentUserId,
 }: MessageBubbleProps) => {
   const isTemp = item.id.toString().startsWith("temp-");
   const username = item.profiles?.username || "User";
   const usernameColor = getUsernameColor(username);
 
-  // ── System Message ────────────────────────────────────────────────────────
+  const groupedReactions = reactions.reduce(
+    (acc: Record<string, Reaction[]>, r) => {
+      if (!acc[r.emoji]) acc[r.emoji] = [];
+      acc[r.emoji].push(r);
+      return acc;
+    },
+    {},
+  );
+
+  // ── System Message
   if (item.type === "system") {
     return (
       <View style={styles.systemContainer}>
         <View style={styles.systemBadge}>
           <Ionicons
             name="information-circle-outline"
-            size={12}
+            size={11}
             color={COLORS.textMuted}
-            style={{ marginRight: 5 }}
+            style={{ marginRight: 4 }}
           />
-          <Text style={styles.systemText}>{item.content}</Text>
+          <Text style={styles.systemText} numberOfLines={2}>
+            {item.content}
+          </Text>
         </View>
       </View>
     );
   }
 
-  // ── Normal Message ────────────────────────────────────────────────────────
+  // ── Normal Message
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -103,59 +124,117 @@ export const MessageBubble = ({
         </View>
       )}
 
-      {/* ── Bubble ── */}
       <View
         style={[
-          styles.bubble,
-          isMine ? styles.myBubble : styles.theirBubble,
-          isSelected &&
-            (isMine ? styles.myBubbleSelected : styles.theirBubbleSelected),
+          styles.bubbleOuter,
+          isMine ? styles.bubbleOuterMine : styles.bubbleOuterTheirs,
         ]}
       >
-        {/* Username row (only for others in group) */}
-        {!isMine && (
-          <View style={styles.usernameRow}>
-            <Text style={[styles.usernameText, { color: usernameColor }]}>
-              {username}
+        {/* Bubble */}
+        <View
+          style={[
+            styles.bubble,
+            isMine ? styles.myBubble : styles.theirBubble,
+            isSelected &&
+              (isMine ? styles.myBubbleSelected : styles.theirBubbleSelected),
+          ]}
+        >
+          {/* Username */}
+          {!isMine && (
+            <View style={styles.usernameRow}>
+              <Text
+                style={[styles.usernameText, { color: usernameColor }]}
+                numberOfLines={1}
+              >
+                {username}
+              </Text>
+              {isOwner && (
+                <View style={styles.ownerBadge}>
+                  <Ionicons name="star" size={9} color="#FBBF24" />
+                  <Text style={styles.ownerText}>Owner</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          <Text
+            style={[styles.text, isMine ? styles.myText : styles.theirText]}
+          >
+            {item.content}
+          </Text>
+
+          <View style={styles.footer}>
+            <Text
+              style={[styles.time, isMine ? styles.myTime : styles.theirTime]}
+            >
+              {formatTime(item.created_at)}
             </Text>
-            {isOwner && (
-              <View style={styles.ownerBadge}>
-                <Ionicons name="star" size={9} color="#FBBF24" />
-                <Text style={styles.ownerText}>Owner</Text>
-              </View>
+            {isMine && (
+              <Ionicons
+                name={isTemp ? "time-outline" : "checkmark-done"}
+                size={13}
+                color={
+                  isTemp ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.85)"
+                }
+              />
             )}
+          </View>
+        </View>
+
+        {Object.keys(groupedReactions).length > 0 && (
+          <View
+            style={[
+              styles.reactionsRow,
+              isMine ? styles.reactionsRowMine : styles.reactionsRowTheirs,
+            ]}
+          >
+            {Object.entries(groupedReactions).map(([emoji, users]) => {
+              const iReacted = users.some((r) => r.user_id === currentUserId);
+              return (
+                <TouchableOpacity
+                  key={emoji}
+                  style={[
+                    styles.reactionChip,
+                    iReacted && styles.reactionChipActive,
+                  ]}
+                  onPress={() => onReactionToggle(item.id, emoji)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.reactionEmoji}>{emoji}</Text>
+                  <Text
+                    style={[
+                      styles.reactionCount,
+                      iReacted && styles.reactionCountActive,
+                    ]}
+                  >
+                    {users.length}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 
-        {/* Message text */}
-        <Text style={[styles.text, isMine ? styles.myText : styles.theirText]}>
-          {item.content}
-        </Text>
-
-        {/* Footer: time + read receipt */}
-        <View style={styles.footer}>
-          <Text
-            style={[styles.time, isMine ? styles.myTime : styles.theirTime]}
+        {!selectionMode && (
+          <TouchableOpacity
+            style={[
+              styles.reactionBtn,
+              isMine ? styles.reactionBtnMine : styles.reactionBtnTheirs,
+            ]}
+            onPress={() => onReactionPress(item.id)}
+            activeOpacity={0.7}
           >
-            {formatTime(item.created_at)}
-          </Text>
-          {isMine && (
-            <Ionicons
-              name={isTemp ? "time-outline" : "checkmark-done"}
-              size={13}
-              color={
-                isTemp ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.85)"
-              }
-            />
-          )}
-        </View>
+            <Text style={styles.reactionBtnText}>
+              <SimpleLineIcons
+                name="like"
+                size={12}
+                color="hsla(0, 0%, 100%, 0.25)"
+              />
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* ── Bubble Tail ──
-          A small triangle that visually "points" the bubble toward the sender.
-          My messages: right side tail
-          Their messages: left side tail
-      */}
       {isMine ? (
         <View style={styles.myTail} />
       ) : (
@@ -166,33 +245,18 @@ export const MessageBubble = ({
 };
 
 const styles = StyleSheet.create({
-  // ── Wrapper ──
   wrapper: {
     flexDirection: "row",
     alignItems: "flex-end",
     paddingVertical: 3,
     paddingHorizontal: 14,
-    position: "relative",
   },
-  myWrapper: {
-    justifyContent: "flex-end",
-  },
-  theirWrapper: {
-    justifyContent: "flex-start",
-  },
-  selectedWrapper: {
-    backgroundColor: COLORS.selectionBg,
-    borderRadius: 12,
-  },
-  tempWrapper: {
-    opacity: 0.65,
-  },
+  myWrapper: { justifyContent: "flex-end" },
+  theirWrapper: { justifyContent: "flex-start" },
+  selectedWrapper: { backgroundColor: COLORS.selectionBg, borderRadius: 12 },
+  tempWrapper: { opacity: 0.65 },
 
-  // ── Checkbox ──
-  checkboxContainer: {
-    marginRight: 10,
-    justifyContent: "center",
-  },
+  checkboxContainer: { marginRight: 10, justifyContent: "center" },
   checkbox: {
     width: 20,
     height: 20,
@@ -208,9 +272,37 @@ const styles = StyleSheet.create({
     borderColor: COLORS.accent,
   },
 
-  // ── Bubble ──
+  bubbleOuter: {
+    position: "relative",
+  },
+  bubbleOuterMine: {
+    paddingLeft: 30,
+    alignItems: "flex-end",
+  },
+  bubbleOuterTheirs: {
+    paddingRight: 30,
+    alignItems: "flex-start",
+  },
+
+  reactionBtn: {
+    position: "absolute",
+    bottom: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reactionBtnMine: {
+    left: 0,
+  },
+  reactionBtnTheirs: {
+    right: 0,
+  },
+  reactionBtnText: { fontSize: 18 },
+
   bubble: {
-    maxWidth: "76%",
+    maxWidth: "100%",
     paddingHorizontal: 13,
     paddingTop: 8,
     paddingBottom: 6,
@@ -219,25 +311,19 @@ const styles = StyleSheet.create({
   },
   myBubble: {
     backgroundColor: COLORS.myBubble,
-    borderBottomRightRadius: 4, // Flattened corner where tail attaches
-    marginRight: 6, // space for tail
+    borderBottomRightRadius: 4,
+    marginRight: 6,
   },
   theirBubble: {
     backgroundColor: COLORS.theirBubble,
     borderWidth: 1,
     borderColor: COLORS.theirBubbleBorder,
-    borderBottomLeftRadius: 4, // Flattened corner where tail attaches
-    marginLeft: 6, // space for tail
+    borderBottomLeftRadius: 4,
+    marginLeft: 6,
   },
-  myBubbleSelected: {
-    backgroundColor: "#5A52E0",
-  },
-  theirBubbleSelected: {
-    backgroundColor: "#252535",
-  },
+  myBubbleSelected: { backgroundColor: "#5A52E0" },
+  theirBubbleSelected: { backgroundColor: "#252535" },
 
-  // ── Bubble Tails ──
-  // Triangle pointing right for my messages
   myTail: {
     position: "absolute",
     right: 10,
@@ -250,7 +336,6 @@ const styles = StyleSheet.create({
     borderLeftColor: COLORS.myBubble,
     borderBottomWidth: 0,
   },
-  // Triangle pointing left for their messages
   theirTail: {
     position: "absolute",
     left: 10,
@@ -264,7 +349,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
 
-  // ── Username ──
   usernameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -275,6 +359,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     letterSpacing: 0.1,
+    flexShrink: 1,
   },
   ownerBadge: {
     flexDirection: "row",
@@ -285,25 +370,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
   },
-  ownerText: {
-    fontSize: 10,
-    color: "#FBBF24",
-    fontWeight: "700",
-  },
+  ownerText: { fontSize: 10, color: "#FBBF24", fontWeight: "700" },
 
-  // ── Text ──
-  text: {
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  myText: {
-    color: COLORS.white,
-  },
-  theirText: {
-    color: COLORS.textPrimary,
-  },
+  text: { fontSize: 15, lineHeight: 21 },
+  myText: { color: COLORS.white },
+  theirText: { color: COLORS.textPrimary },
 
-  // ── Footer ──
   footer: {
     flexDirection: "row",
     alignItems: "center",
@@ -311,22 +383,42 @@ const styles = StyleSheet.create({
     marginTop: 4,
     gap: 4,
   },
-  time: {
-    fontSize: 10,
-    letterSpacing: 0.2,
-  },
-  myTime: {
-    color: "rgba(255,255,255,0.55)",
-  },
-  theirTime: {
-    color: COLORS.textMuted,
-  },
+  time: { fontSize: 10, letterSpacing: 0.2 },
+  myTime: { color: "rgba(255,255,255,0.55)" },
+  theirTime: { color: COLORS.textMuted },
 
-  // ── System Message ──
+  reactionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 4,
+    marginHorizontal: 6,
+  },
+  reactionsRowMine: { justifyContent: "flex-end" },
+  reactionsRowTheirs: { justifyContent: "flex-start" },
+  reactionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  reactionChipActive: {
+    backgroundColor: "rgba(108, 99, 255, 0.2)",
+    borderColor: "#6C63FF",
+  },
+  reactionEmoji: { fontSize: 14 },
+  reactionCount: { fontSize: 12, color: COLORS.textMuted, fontWeight: "600" },
+  reactionCountActive: { color: "#6C63FF" },
+
   systemContainer: {
     alignItems: "center",
-    marginVertical: 10,
-    width: "100%",
+    marginVertical: 8,
+    paddingHorizontal: 20,
   },
   systemBadge: {
     flexDirection: "row",
@@ -334,13 +426,15 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.systemBg,
     borderWidth: 1,
     borderColor: COLORS.systemBorder,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 20,
+    maxWidth: "90%",
   },
   systemText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
+    fontSize: 11,
+    color: "#4A4A62",
     fontStyle: "italic",
+    flexShrink: 1,
   },
 });
