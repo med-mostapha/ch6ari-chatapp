@@ -370,3 +370,42 @@ export const leaveRoom = async (
     return { error };
   }
 };
+
+// ── Reactions ──
+
+export const getReactions = async (messageId: string) => {
+  const { data, error } = await supabase
+    .from("reactions")
+    .select("id, emoji, user_id")
+    .eq("message_id", messageId);
+
+  return { data, error };
+};
+
+export const addReaction = async (
+  messageId: string,
+  userId: string,
+  emoji: string,
+) => {
+  const { error } = await supabase
+    .from("reactions")
+    .upsert(
+      { message_id: messageId, user_id: userId, emoji },
+      { onConflict: "message_id, user_id, emoji" }
+    );
+
+  return { error };
+};
+
+export const removeReaction = async (
+  messageId: string,
+  userId: string,
+  emoji: string,
+) => {
+  const { error } = await supabase
+    .from("reactions")
+    .delete()
+    .match({ message_id: messageId, user_id: userId, emoji });
+
+  return { error };
+};
