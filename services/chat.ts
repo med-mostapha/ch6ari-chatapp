@@ -50,7 +50,7 @@ export const kickUser = async (
       {
         room_id: roomId,
         user_id: null,
-        content: `🚫 ${ownerName} removed ${targetUserName} from the group.`,
+        content: `${ownerName} removed ${targetUserName} from the group.`,
         type: "system",
       },
     ]);
@@ -196,7 +196,11 @@ export const startNewChat = async (
 
     const { data: room, error: roomError } = await supabase
       .from("rooms")
-      .insert([{ name: targetUserName, is_group: false }])
+      .insert([{ 
+        name: targetUserName, 
+        is_group: false,
+        created_by: currentUserId 
+      }])
       .select()
       .single();
 
@@ -286,7 +290,7 @@ export const inviteUserToRoom = async (
       {
         room_id: roomId,
         user_id: null,
-        content: `➕ ${inviterName} added ${targetUserName}`,
+        content: `${inviterName} added ${targetUserName}`,
         type: "system",
       },
     ]);
@@ -349,7 +353,7 @@ export const leaveRoom = async (
       await supabase.from("messages").insert([
         {
           room_id: roomId,
-          user_id: userId,
+          user_id: null, 
           content: `${username} left the chat`,
           type: "system",
         },
