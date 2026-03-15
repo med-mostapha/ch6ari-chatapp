@@ -184,7 +184,9 @@ export default function NewChatScreen() {
               onPress={(e) => e.stopPropagation()}
             >
               <View style={styles.modalHandle} />
-              <Text style={styles.modalTitle}>New Group</Text>
+              <Text style={styles.modalTitle}>
+                New GrSuccess. No rows returnedoup
+              </Text>
               <Text style={styles.modalSubtitle}>
                 Give your group a name to get started
               </Text>
