@@ -1,12 +1,9 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 Deno.serve(async (req: Request) => {
   try {
     const payload = await req.json()
     const { record } = payload
-
-    console.log("Received payload:", JSON.stringify(record))
 
     if (!record?.room_id || !record?.user_id) {
       return new Response(
@@ -20,52 +17,44 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     )
 
-  
     const { data: members, error: membersError } = await supabase
       .from("room_members")
       .select(`
         user_id,
-        profiles!inner (
-          expo_push_token,
-          username
+        push_tokens!inner (
+          token,
+          platform
         )
       `)
       .eq("room_id", record.room_id)
       .neq("user_id", record.user_id)
 
     if (membersError) {
-      console.error("DB Error:", membersError.message)
       throw new Error(`DB Error: ${membersError.message}`)
     }
 
-    console.log("Members fetched:", JSON.stringify(members))
-
-  
-    const pushTokens: string[] = (members ?? [])
-      .map((m: any) => m.profiles?.expo_push_token)
+    const validTokens: string[] = (members ?? [])
+      .flatMap((m: any) => m.push_tokens ?? [])
+      .map((t: any) => t.token)
       .filter(
         (token: unknown): token is string =>
           typeof token === "string" && token.startsWith("ExponentPushToken[")
       )
 
-    console.log("Valid tokens:", pushTokens)
-
-    if (pushTokens.length === 0) {
+    if (validTokens.length === 0) {
       return new Response(
         JSON.stringify({ message: "No valid tokens found" }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       )
     }
 
-   
     const { data: sender } = await supabase
       .from("profiles")
       .select("username")
       .eq("id", record.user_id)
       .single()
 
-   
-    const notifications = pushTokens.map((token) => ({
+    const notifications = validTokens.map((token) => ({
       to: token,
       sound: "default",
       title: sender?.username ?? "Ch6ari",
@@ -76,7 +65,6 @@ Deno.serve(async (req: Request) => {
       priority: "high",
     }))
 
- 
     const expoRes = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: {
@@ -93,10 +81,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const expoResult = await expoRes.json()
-    console.log("Expo result:", JSON.stringify(expoResult))
 
     return new Response(
-      JSON.stringify({ success: true, sent_to: pushTokens.length, expoResult }),
+      JSON.stringify({ success: true, sent_to: validTokens.length, expoResult }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     )
 

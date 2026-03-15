@@ -1,5 +1,5 @@
 import { AuthProvider, useAuth } from "@/context/AuthContext";
-import { updatePushToken } from "@/services/profileService";
+import { removePushToken, updatePushToken } from "@/services/profileService";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Linking from "expo-linking";
@@ -63,11 +63,15 @@ function RootLayoutNav() {
 
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
+  const pushTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (session?.user?.id) {
       registerForPushNotificationsAsync().then(async (token) => {
-        if (token) await updatePushToken(session.user.id, token);
+        if (token) {
+          pushTokenRef.current = token;
+          await updatePushToken(session.user.id, token);
+        }
       });
 
       notificationListener.current =
@@ -81,6 +85,9 @@ function RootLayoutNav() {
         });
 
       return () => {
+        if (pushTokenRef.current && session?.user?.id) {
+          removePushToken(session.user.id, pushTokenRef.current);
+        }
         notificationListener.current?.remove();
         responseListener.current?.remove();
       };
