@@ -1,10 +1,3 @@
-/**
- * app/new-chat.tsx
- * Fix: Modal backdrop was overlapping the card using absoluteFill.
- * Solution: The Pressable IS the overlay — nested Pressable on the
- * card uses e.stopPropagation() to prevent taps inside from closing it.
- */
-
 import { useAuth } from "@/context/AuthContext";
 import {
   createRoom,
@@ -20,7 +13,10 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -61,6 +57,7 @@ function getAvatarColor(name: string): string {
 }
 
 export default function NewChatScreen() {
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const { roomId } = useLocalSearchParams();
   const { session } = useAuth();
   const router = useRouter();
@@ -73,6 +70,19 @@ export default function NewChatScreen() {
   const [groupName, setGroupName] = useState("");
   const [currentUsername, setCurrentUsername] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const getProfile = async () => {
@@ -155,75 +165,73 @@ export default function NewChatScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* ────────────────────────────────────────────────────
-          ✅ FIXED MODAL
-          Pattern:
-            <Pressable overlay onPress=close>      ← dark bg, closes on tap outside
-              <Pressable card onPress=stopProp>    ← the card, blocks event bubbling
-                ...content...
-              </Pressable>
-            </Pressable>
-      ──────────────────────────────────────────────────── */}
       <Modal
         visible={modalVisible}
-        animationType="slide"
+        animationType="fade"
         transparent
         statusBarTranslucent
       >
         <Pressable style={styles.modalOverlay} onPress={closeModal}>
-          {/* Card — stopPropagation prevents taps here from reaching the overlay */}
-          <Pressable
-            style={styles.modalCard}
-            onPress={(e) => e.stopPropagation()}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{ width: "100%" }}
           >
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>New Group</Text>
-            <Text style={styles.modalSubtitle}>
-              Give your group a name to get started
-            </Text>
+            <Pressable
+              style={[
+                styles.modalCard,
+                Platform.OS === "android" && { marginBottom: keyboardHeight },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalTitle}>New Group</Text>
+              <Text style={styles.modalSubtitle}>
+                Give your group a name to get started
+              </Text>
 
-            <View style={styles.modalInputWrapper}>
-              <Ionicons
-                name="people-outline"
-                size={16}
-                color={COLORS.textMuted}
-              />
-              <TextInput
-                placeholder="Group name..."
-                placeholderTextColor={COLORS.textMuted}
-                style={styles.modalInput}
-                value={groupName}
-                onChangeText={setGroupName}
-                autoFocus
-                maxLength={40}
-              />
-            </View>
+              <View style={styles.modalInputWrapper}>
+                <Ionicons
+                  name="people-outline"
+                  size={16}
+                  color={COLORS.textMuted}
+                />
+                <TextInput
+                  placeholder="Group name..."
+                  placeholderTextColor={COLORS.textMuted}
+                  style={styles.modalInput}
+                  value={groupName}
+                  onChangeText={setGroupName}
+                  autoFocus
+                  maxLength={40}
+                />
+              </View>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                onPress={closeModal}
-                style={styles.cancelBtn}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleCreateGroup}
-                style={[
-                  styles.createBtn,
-                  !groupName.trim() && styles.createBtnDisabled,
-                ]}
-                disabled={!groupName.trim() || loading}
-                activeOpacity={0.8}
-              >
-                {loading ? (
-                  <ActivityIndicator color={COLORS.white} size="small" />
-                ) : (
-                  <Text style={styles.createText}>Create</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </Pressable>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  onPress={closeModal}
+                  style={styles.cancelBtn}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleCreateGroup}
+                  style={[
+                    styles.createBtn,
+                    !groupName.trim() && styles.createBtnDisabled,
+                  ]}
+                  disabled={!groupName.trim() || loading}
+                  activeOpacity={0.8}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={COLORS.white} size="small" />
+                  ) : (
+                    <Text style={styles.createText}>Create</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
 
@@ -502,15 +510,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgba(10,10,15,0.6)",
   },
-
-  // ── Modal ──────────────────────────────────────────────────────────────────
-  // ✅ Overlay = the Pressable itself (full screen dark bg, closes on tap outside)
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.72)",
     justifyContent: "flex-end",
   },
-  // ✅ Card = nested Pressable, blocks event bubbling with e.stopPropagation()
   modalCard: {
     backgroundColor: COLORS.surface,
     borderTopLeftRadius: 28,
