@@ -19,22 +19,29 @@ Deno.serve(async (req: Request) => {
 
     const { data: members, error: membersError } = await supabase
       .from("room_members")
-      .select(`
-        user_id,
-        push_tokens!inner (
-          token,
-          platform
-        )
-      `)
+      .select("user_id")
       .eq("room_id", record.room_id)
       .neq("user_id", record.user_id)
 
-    if (membersError) {
-      throw new Error(`DB Error: ${membersError.message}`)
+    if (membersError) throw new Error(`DB Error: ${membersError.message}`)
+
+    const userIds = members?.map((m: any) => m.user_id) ?? []
+
+    if (userIds.length === 0) {
+      return new Response(
+        JSON.stringify({ message: "No members found" }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
     }
 
-    const validTokens: string[] = (members ?? [])
-      .flatMap((m: any) => m.push_tokens ?? [])
+    const { data: tokensData, error: tokensError } = await supabase
+      .from("push_tokens")
+      .select("token, platform")
+      .in("user_id", userIds)
+
+    if (tokensError) throw new Error(`Tokens Error: ${tokensError.message}`)    
+
+    const validTokens: string[] = (tokensData ?? [])
       .map((t: any) => t.token)
       .filter(
         (token: unknown): token is string =>
@@ -60,7 +67,7 @@ Deno.serve(async (req: Request) => {
       title: sender?.username ?? "Ch6ari",
       body: record.content?.length > 100
         ? record.content.substring(0, 97) + "..."
-        : record.content ?? "رسالة جديدة",
+        : record.content ?? "New message",
       data: { roomId: record.room_id },
       priority: "high",
     }))
