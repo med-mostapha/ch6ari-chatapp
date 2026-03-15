@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   AppState,
@@ -15,12 +15,16 @@ import { MessageBubble } from "@/components/MessageBubble";
 import { RoomDetailsModal } from "@/components/RoomDetailsModal";
 import { ChatHeader } from "@/components/chat/ChatHeader";
 import { ChatInput } from "@/components/chat/ChatInput";
+import { ReactionPicker } from "@/components/chat/ReactionPicker";
 
 // Services & Context
 import { useAuth } from "@/context/AuthContext";
 import {
+  addReaction,
   deleteMessages,
+  getReactions,
   markMessagesAsRead,
+  removeReaction,
   sendMessage,
 } from "@/services/chat";
 import { supabase } from "@/services/supabaseClient";
@@ -33,13 +37,18 @@ const COLORS = {
   textMuted: "#5A5A72",
 };
 
-// ── Helper: format a date as a readable separator label ──────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface Reaction {
+  id: string;
+  emoji: string;
+  user_id: string;
+}
+
 function getDateLabel(dateStr: string): string {
   const date = new Date(dateStr);
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
-
   if (date.toDateString() === today.toDateString()) return "Today";
   if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
   return date.toLocaleDateString([], {
@@ -49,7 +58,6 @@ function getDateLabel(dateStr: string): string {
   });
 }
 
-// ── Date separator component ─────────────────────────────────────────────────
 function DateSeparator({ label }: { label: string }) {
   return (
     <View style={sepStyles.container}>
@@ -68,11 +76,7 @@ const sepStyles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 10,
   },
-  line: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.border,
-  },
+  line: { flex: 1, height: 1, backgroundColor: COLORS.border },
   label: {
     fontSize: 11,
     fontWeight: "600",
@@ -82,9 +86,9 @@ const sepStyles = StyleSheet.create({
   },
 });
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ChatDetailScreen() {
   const { id } = useLocalSearchParams();
+  const roomId = Array.isArray(id) ? id[0] : (id as string);
   const { session } = useAuth();
   const router = useRouter();
   const flatListRef = useRef<FlatList>(null);
@@ -98,13 +102,18 @@ export default function ChatDetailScreen() {
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [roomTitle, setRoomTitle] = useState("Loading...");
 
+  // Reactions state
+  const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!id || !session?.user?.id) return;
 
     const initializeChat = async () => {
       await fetchRoomDetails();
       await fetchMessages();
-      await markMessagesAsRead(id as string, session.user.id);
+      await markMessagesAsRead(roomId as string, session.user.id);
     };
 
     initializeChat();
@@ -123,7 +132,7 @@ export default function ChatDetailScreen() {
           event: "DELETE",
           schema: "public",
           table: "rooms",
-          filter: `id=eq.${id}`,
+          filter: `id=eq.${roomId}`,
         },
         () => {
           Alert.alert("Notice", "This chat has been deleted by the owner.");
@@ -136,9 +145,9 @@ export default function ChatDetailScreen() {
           event: "INSERT",
           schema: "public",
           table: "messages",
+          filter: `room_id=eq.${roomId}`,
         },
         async (payload) => {
-          if (payload.new.room_id !== id) return;
           if (payload.new.user_id !== session.user.id) {
             await markMessagesAsRead(id as string, session.user.id);
           }
@@ -168,13 +177,20 @@ export default function ChatDetailScreen() {
       )
       .on(
         "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "messages",
-        },
+        { event: "DELETE", schema: "public", table: "messages" },
         (payload) => {
           setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
+        },
+      )
+      //  Realtime reactions
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "reactions" },
+        async (payload) => {
+          const msgId =
+            (payload.new as any)?.message_id ||
+            (payload.old as any)?.message_id;
+          if (msgId) await fetchReactionsForMessage(msgId);
         },
       )
       .subscribe();
@@ -195,13 +211,12 @@ export default function ChatDetailScreen() {
       .select(
         `name, is_group, created_by, room_members (user_id, profiles:user_id (username))`,
       )
-      .eq("id", id)
+      .eq("id", roomId)
       .single();
 
     if (data) {
       const roomData = data as any;
       setRoomOwner(roomData.created_by);
-
       if (!roomData.is_group) {
         const otherMember = roomData.room_members?.find(
           (m: any) => m.user_id !== session?.user?.id,
@@ -224,10 +239,16 @@ export default function ChatDetailScreen() {
       const { data } = await supabase
         .from("messages")
         .select("*, profiles(username)")
-        .eq("room_id", id)
+        .eq("room_id", roomId)
         .order("created_at", { ascending: true });
 
-      if (data) setMessages(data);
+      if (data) {
+        setMessages(data);
+        const ids = data
+          .filter((m) => !m.id.toString().startsWith("temp-"))
+          .map((m) => m.id);
+        if (ids.length > 0) await fetchReactionsForMessages(ids);
+      }
       setTimeout(
         () => flatListRef.current?.scrollToEnd({ animated: false }),
         200,
@@ -237,13 +258,37 @@ export default function ChatDetailScreen() {
     }
   };
 
+  const fetchReactionsForMessages = async (messageIds: string[]) => {
+    const { data } = await supabase
+      .from("reactions")
+      .select("id, emoji, user_id, message_id")
+      .in("message_id", messageIds);
+
+    if (data) {
+      const grouped: Record<string, Reaction[]> = {};
+      data.forEach((r: any) => {
+        if (!grouped[r.message_id]) grouped[r.message_id] = [];
+        grouped[r.message_id].push(r);
+      });
+      setReactions(grouped);
+    }
+  };
+
+  const fetchReactionsForMessage = async (messageId: string) => {
+    const { data } = await getReactions(messageId);
+    if (data) {
+      setReactions((prev) => ({
+        ...prev,
+        [messageId]: data as Reaction[],
+      }));
+    }
+  };
+
   const handleSend = async () => {
     if (!newMessage.trim() || !session?.user?.id || isSending) return;
-
     const content = newMessage.trim();
     setNewMessage("");
     setIsSending(true);
-
     const tempId = `temp-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
@@ -257,10 +302,12 @@ export default function ChatDetailScreen() {
       },
     ]);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
-
-    const { error } = await sendMessage(id as string, session.user.id, content);
+    const { error } = await sendMessage(
+      roomId as string,
+      session.user.id,
+      content,
+    );
     setIsSending(false);
-
     if (error) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setNewMessage(content);
@@ -305,11 +352,39 @@ export default function ChatDetailScreen() {
     );
   };
 
-  // ── Build a list with date separators injected between days ─────────────
+  const handleReactionPress = useCallback((messageId: string) => {
+    setActiveMessageId(messageId);
+    setPickerVisible(true);
+  }, []);
+
+  const handleReactionToggle = useCallback(
+    async (messageId: string, emoji: string) => {
+      if (!session?.user?.id) return;
+      const existing = reactions[messageId] ?? [];
+      const myReaction = existing.find(
+        (r) => r.user_id === session.user.id && r.emoji === emoji,
+      );
+      if (myReaction) {
+        await removeReaction(messageId, session.user.id, emoji);
+      } else {
+        await addReaction(messageId, session.user.id, emoji);
+      }
+      await fetchReactionsForMessage(messageId);
+    },
+    [reactions, session?.user?.id],
+  );
+
+  const handleSelectEmoji = useCallback(
+    async (emoji: string) => {
+      if (!activeMessageId || !session?.user?.id) return;
+      await handleReactionToggle(activeMessageId, emoji);
+    },
+    [activeMessageId, handleReactionToggle],
+  );
+
   const messagesWithSeparators = React.useMemo(() => {
     const result: any[] = [];
     let lastDateLabel = "";
-
     for (const msg of messages) {
       const label = getDateLabel(msg.created_at);
       if (label !== lastDateLabel) {
@@ -341,10 +416,8 @@ export default function ChatDetailScreen() {
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        // Accent colored refresh indicator
         progressViewOffset={10}
         renderItem={({ item }) => {
-          // Date separator
           if (item.type === "separator") {
             return <DateSeparator label={item.label} />;
           }
@@ -355,12 +428,16 @@ export default function ChatDetailScreen() {
               isSelected={selectedIds.includes(item.id)}
               selectionMode={selectionMode}
               isOwner={item.user_id === roomOwner}
+              reactions={reactions[item.id] ?? []}
+              currentUserId={session?.user?.id!}
               onLongPress={() =>
                 handleLongPress(item.id, item.user_id === session?.user?.id)
               }
               onPress={() =>
                 handlePress(item.id, item.user_id === session?.user?.id)
               }
+              onReactionPress={handleReactionPress}
+              onReactionToggle={handleReactionToggle}
               formatTime={(d) =>
                 new Date(d).toLocaleTimeString([], {
                   hour: "2-digit",
@@ -381,6 +458,20 @@ export default function ChatDetailScreen() {
         />
       )}
 
+      {/*  Reaction Picker */}
+      <ReactionPicker
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        onSelectEmoji={handleSelectEmoji}
+        selectedEmojis={
+          activeMessageId
+            ? (reactions[activeMessageId] ?? [])
+                .filter((r) => r.user_id === session?.user?.id)
+                .map((r) => r.emoji)
+            : []
+        }
+      />
+
       <RoomDetailsModal
         visible={detailsVisible}
         onClose={() => setDetailsVisible(false)}
@@ -394,12 +485,6 @@ export default function ChatDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg, // Dark chat background
-  },
-  listContent: {
-    paddingVertical: 12,
-    paddingHorizontal: 2, // Minimal horizontal — bubbles handle their own padding
-  },
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  listContent: { paddingVertical: 12, paddingHorizontal: 2 },
 });
