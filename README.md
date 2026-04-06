@@ -1,289 +1,132 @@
-# Ch6ari — Real-Time Chat Application
+# 🚀 Ch6ari — Real-Time Chat Application
 
-A full-stack mobile chat application built with React Native (Expo) and Supabase, supporting real-time messaging, push notifications, emoji reactions, and group management.
+A full-stack mobile chat application built with React Native (Expo) and Supabase.  
+Designed to simulate a **real-world scalable messaging system** with real-time communication, push notifications, and group management.
 
 ---
 
-## Screenshots
+## 🏆 Key Highlights
 
-| Login | Chats | Chat Room | Group Details |
-|-------|-------|-----------|---------------|
+- Real-time messaging using WebSockets (Supabase Realtime)
+- Multi-device push notification system (FCM + APNs)
+- Optimistic UI for instant user feedback
+- Group chat system with roles and permissions
+- Scalable relational database design
+
+---
+
+## 📱 Screenshots
+
+| Login                             | Chats                             | Chat Room                       | Group Details                         |
+| --------------------------------- | --------------------------------- | ------------------------------- | ------------------------------------- |
 | ![Login](./screenshots/login.png) | ![Chats](./screenshots/chats.png) | ![Chat](./screenshots/chat.png) | ![Details](./screenshots/details.png) |
 
-| Reaction Picker | Onboarding | New Chat | Edit Profile |
-|----------------|------------|----------|--------------|
+| Reactions                                 | Onboarding                                  | New Chat                                | Settings                              |
+| ----------------------------------------- | ------------------------------------------- | --------------------------------------- | ------------------------------------- |
 | ![Reactions](./screenshots/reactions.png) | ![Onboarding](./screenshots/onboarding.png) | ![New Chat](./screenshots/new-chat.png) | ![Profile](./screenshots/profile.png) |
 
 ---
 
-## Tech Stack
+## 🎯 Why This Project
 
-| Layer | Technology |
-|-------|------------|
-| Framework | React Native + Expo SDK 55 |
-| Router | Expo Router (file-based) |
-| Backend | Supabase (PostgreSQL + Auth + Realtime + Edge Functions) |
-| ORM | Supabase JS Client v2 |
-| Push Notifications | Expo Notifications + Firebase FCM (Android) + APNs (iOS) |
-| Animations | Lottie React Native |
-| Build System | EAS Build |
-| Language | TypeScript |
+This project was built to understand how real-time systems work in production:
+
+- Handling concurrent users
+- Managing real-time events (messages, reactions)
+- Delivering push notifications across devices
+- Designing scalable backend architecture
 
 ---
 
-## Architecture
+## 🧱 Tech Stack
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   React Native App                  │
-│  ┌─────────┐  ┌──────────┐  ┌────────────────────┐ │
-│  │  Expo   │  │  Expo    │  │   Expo             │ │
-│  │ Router  │  │  Auth    │  │   Notifications    │ │
-│  └─────────┘  └──────────┘  └────────────────────┘ │
-└─────────────────────┬───────────────────────────────┘
-                      │ Supabase JS Client
-┌─────────────────────▼───────────────────────────────┐
-│                    Supabase                         │
-│  ┌──────────┐  ┌──────────┐  ┌────────────────────┐│
-│  │ PostgreSQL│  │ Realtime │  │  Edge Functions    ││
-│  │    DB    │  │ Websocket│  │  (Deno/TypeScript) ││
-│  └──────────┘  └──────────┘  └────────────────────┘│
-└─────────────────────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────┐
-│              Push Notification Flow                 │
-│  Firebase FCM (Android) ←→ Expo Push API ←→ APNs   │
-└─────────────────────────────────────────────────────┘
-```
+- React Native (Expo)
+- TypeScript
+- Supabase (PostgreSQL + Auth + Realtime)
+- Expo Notifications (FCM + APNs)
+- Expo Router
 
 ---
 
-## Database Schema
+## ⚙️ Core Features
 
-```sql
-profiles
-  id            uuid PK (references auth.users)
-  username      text
-  avatar_url    text
-  expo_push_token text  -- legacy, replaced by push_tokens
-  created_at    timestamptz
+### 💬 Messaging
 
-push_tokens
-  id            uuid PK
-  user_id       uuid FK → profiles.id (CASCADE)
-  token         text
-  platform      text  -- 'ios' | 'android'
-  updated_at    timestamptz
-  UNIQUE(user_id, token)
-
-rooms
-  id            uuid PK
-  name          text
-  is_group      boolean
-  created_by    uuid FK → profiles.id
-  last_message_at timestamptz
-  created_at    timestamptz
-
-room_members
-  id            uuid PK
-  room_id       uuid FK → rooms.id (CASCADE)
-  user_id       uuid FK → profiles.id (CASCADE)
-
-messages
-  id            uuid PK
-  room_id       uuid FK → rooms.id (CASCADE)
-  user_id       uuid FK → profiles.id (nullable for system messages)
-  content       text
-  type          text  -- 'text' | 'system'
-  is_read       boolean
-  created_at    timestamptz
-
-reactions
-  id            uuid PK
-  message_id    uuid FK → messages.id (CASCADE)
-  user_id       uuid FK → profiles.id (CASCADE)
-  emoji         text
-  UNIQUE(message_id, user_id, emoji)
-```
-
----
-
-## Project Structure
-
-```
-├── app/
-│   ├── (auth)/
-│   │   ├── login.tsx
-│   │   ├── register.tsx
-│   │   ├── forgot-password.tsx
-│   │   └── reset-password.tsx
-│   ├── (tabs)/
-│   │   └── chats.tsx
-│   ├── (onboarding)/
-│   ├── chat/
-│   │   └── [id].tsx          # Chat room screen
-│   ├── new-chat.tsx           # Search users + create group
-│   ├── edit-profile.tsx
-│   └── _layout.tsx            # Root layout + push token registration
-├── components/
-│   ├── chat/
-│   │   ├── ChatHeader.tsx
-│   │   ├── ChatInput.tsx
-│   │   └── ReactionPicker.tsx
-│   ├── MessageBubble.tsx
-│   └── RoomDetailsModal.tsx
-├── context/
-│   └── AuthContext.tsx
-├── services/
-│   ├── auth.ts
-│   ├── chat.ts                # All Supabase DB operations
-│   ├── profileService.ts      # Push token management
-│   └── supabaseClient.ts
-├── supabase/
-│   └── functions/
-│       └── send-notification/
-│           └── index.ts       # Edge Function (Deno)
-├── assets/
-├── google-services.json       # NOT committed (in .gitignore)
-├── app.config.js              # Dynamic config for EAS secrets
-├── app.json
-└── eas.json
-```
-
----
-
-## Features
-
-### Messaging
-- Real-time messages via Supabase Realtime (WebSocket)
-- Optimistic UI — messages appear instantly before server confirmation
-- Message deletion (own messages only)
+- Real-time chat (WebSocket)
+- Optimistic UI (instant message display)
 - Read receipts
-- Date separators between days
-- System messages (join/leave/kick events)
+- Message deletion (own messages)
+- System messages (join/leave)
 
-### Push Notifications
-- Multi-device support via `push_tokens` table
-- Android: Firebase FCM V1
-- iOS: Expo Push API + APNs
-- Triggered via Supabase Database Webhook → Edge Function → Expo API
-- Token auto-update on login, auto-remove on logout
+### 🔔 Push Notifications
 
-### Reactions
-- 6 emoji reactions: 👍 ❤️ 😂 😮 😢 👏
-- Real-time reaction updates via Supabase Realtime
-- Toggle (add/remove) own reactions
-- Reaction count display per emoji
+- Multi-device support
+- Android: Firebase FCM
+- iOS: APNs via Expo
+- Triggered via backend events
 
-### Groups
-- Create group rooms with custom names
-- Invite users by username search
-- Owner can kick members
-- Leave room (non-owners)
-- Delete group (owner only)
-- Member list with owner badge
+### 😀 Reactions
 
-### Auth
-- Email/password authentication via Supabase Auth
-- Email verification flow
-- Password reset via deep link
-- Profile auto-creation via DB trigger on signup
+- Emoji reactions (👍 ❤️ 😂 😮 😢 👏)
+- Real-time updates
+- Toggle reactions
 
----
+### 👥 Groups
 
-## Push Notification Flow
+- Create group chats
+- Add/remove members
+- Owner permissions
+- Leave/delete group
 
-```
-1. User sends message
-         ↓
-2. INSERT into messages table
-         ↓
-3. Database Webhook fires → sends POST to Edge Function
-         ↓
-4. Edge Function (Deno):
-   - Fetches room members (except sender) from room_members
-   - Fetches their push tokens from push_tokens table
-   - Filters valid ExponentPushToken[...] tokens
-   - Sends batch notification to https://exp.host/--/api/v2/push/send
-         ↓
-5. Expo Push Service → Firebase FCM (Android) / APNs (iOS)
-         ↓
-6. Device receives notification
-```
+### 🔐 Authentication
+
+- Email/password authentication
+- Password reset flow
+- Secure session handling
 
 ---
 
-## Environment Variables
+## 🗄️ Database Design
 
-Variables managed via EAS Secrets (not in `.env`):
+Core entities:
 
-| Variable | Description |
-|----------|-------------|
-| `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `EXPO_PUBLIC_SUPABASE_KEY` | Supabase anon key |
-| `GOOGLE_SERVICES_JSON` | Firebase config file (EAS Secret, type: file) |
-
-Supabase Edge Function secrets (set via Supabase Dashboard):
-
-| Secret | Description |
-|--------|-------------|
-| `SUPABASE_URL` | Auto-injected |
-| `SUPABASE_SERVICE_ROLE_KEY` | Auto-injected |
+- Users (profiles)
+- Rooms (chat / groups)
+- Messages
+- Reactions
+- Push Tokens (multi-device support)
 
 ---
 
-## Local Development
+## 🏗️ Architecture Overview
 
-```bash
-# Install dependencies
-npm install
-
-# Start dev server
-npx expo start --dev-client
-
-# Deploy Edge Function
-supabase functions deploy send-notification --no-verify-jwt
-```
-
-### EAS Build Profiles
-
-```bash
-# Development build (with dev client)
-eas build --platform android --profile development
-
-# Internal distribution APK
-eas build --platform android --profile preview
-
-# Production AAB (Play Store)
-eas build --platform android --profile production
-```
+- Frontend: React Native (Expo)
+- Backend: Supabase (BaaS)
+- Realtime: WebSocket via Supabase
+- Notifications: Expo Push API + FCM/APNs
 
 ---
 
-## Git Branches
+## 🚀 Future Improvements
 
-| Branch | Description |
-|--------|-------------|
-| `main` | Stable production code |
-| `feature/multi-device-push` | Multi-device push token support |
-| `feature/reactions` | Emoji reactions feature |
-
----
-
-## Known Constraints
-
-- Push notifications on Android require a physical device (not Expo Go from SDK 53+)
-- `google-services.json` must be provided via EAS Secret — never commit to Git
-- Supabase Free tier has Edge Function cold start (~200-400ms delay)
-- Realtime requires tables to be added to `supabase_realtime` publication
+- End-to-end encryption (E2EE)
+- Message media support (images, files)
+- Typing indicators
+- Offline message queue
+- Performance optimization
 
 ---
 
-## Supabase Realtime Tables
+## 🏁 Summary
 
-```sql
--- Tables subscribed to Realtime
-SELECT tablename FROM pg_publication_tables
-WHERE pubname = 'supabase_realtime';
--- rooms, room_members, messages, reactions
-```
+This project demonstrates:
+
+- Building a real-time system
+- Handling live updates and concurrency
+- Designing scalable backend structures
+- Integrating push notification systems
+
+Suitable as:
+
+- Portfolio project
+- Mobile system design case study
